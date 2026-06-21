@@ -93,7 +93,7 @@
     </select>
     <select name="pool" class="form-control" style="max-width: 120px;">
       <option value="" <%= (typeof poolType === 'undefined' || poolType === '') ? 'selected' : '' %>>全部类型</option>
-      <option value="solo" <%= poolType === 'solo' ? 'selected' : '' %>>独享</option>
+      <option value="solo" <%= poolType === 'solo' ? 'selected' : '' %>>独享链接</option>
       <option value="pool" <%= poolType === 'pool' ? 'selected' : '' %>>共享链接</option>
     </select>
     <button type="submit" class="btn btn-primary btn-sm">筛选</button>
@@ -131,8 +131,8 @@
     </select>
     <select id="exportPool" class="form-control" style="max-width: 100px;">
       <option value="">全部类型</option>
-      <option value="solo">独享</option>
-      <option value="pool">共享</option>
+      <option value="solo">独享链接</option>
+      <option value="pool">共享链接</option>
     </select>
     <button class="btn btn-sm btn-primary" onclick="exportLinks('csv')">导出 CSV</button>
     <button class="btn btn-sm btn-primary" onclick="exportLinks('txt')">导出 TXT</button>
@@ -157,7 +157,7 @@
           <% if (link.is_pool === 1) { %>
             <span class="tag tag-warning" style="font-size:10px;">共享链接</span>
           <% } else { %>
-            <span class="tag tag-default" style="font-size:10px;">独享</span>
+            <span class="tag tag-default" style="font-size:10px;">独享链接</span>
           <% } %>
           <% if (link.status === 'active') { %>
             <span class="tag tag-success">有效</span>

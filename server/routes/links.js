@@ -400,7 +400,7 @@ router.get('/api/links/export', requireAuth, (req, res) => {
   const header = '链接地址,账号,类型,有效期(小时),到期时间,使用次数,最大次数,状态,创建时间';
   const rows = links.map(l => {
     const url = `https://yunpan.up.railway.app/s/${l.token}`;
-    const type = l.is_pool === 1 ? '共享' : '独享';
+    const type = l.is_pool === 1 ? '共享链接' : '独享链接';
     const isPending = l.first_used_at === null && l.status === 'active';
     const statusMap = { active: '有效', expired: '已过期', disabled: '已停用' };
     const statusName = isPending ? '待使用' : (statusMap[l.status] || l.status);
