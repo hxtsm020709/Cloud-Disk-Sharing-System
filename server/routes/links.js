@@ -53,7 +53,7 @@ router.get('/links', requireAuth, (req, res) => {
   const links = db.all(sql, params);
 
   res.render('links', {
-    title: '共享链接管理',
+    title: '分享池链接管理',
     adminUsername: req.session.adminUsername,
     accounts,
     links,
