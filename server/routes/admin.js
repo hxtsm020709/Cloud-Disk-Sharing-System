@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const db = require('../database');
-const { requireAuth, redirectIfAuth } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
 const config = require('../config');
 
 const router = express.Router();
@@ -15,61 +15,6 @@ function ensureAdmin() {
     console.log('默认管理员账号已创建:', config.adminUser, '/', config.adminPass);
   }
 }
-
-// 登录页面
-router.get(config.loginPath, redirectIfAuth, (req, res) => {
-  res.render('login', {
-    title: '管理员登录',
-    error: null,
-    layout: false,
-    loginPath: config.loginPath,
-  });
-});
-
-// 处理登录
-router.post(config.loginPath, redirectIfAuth, (req, res) => {
-  const { username, password } = req.body;
-
-  if (!username || !password) {
-    return res.render('login', {
-      title: '管理员登录',
-      error: '请输入用户名和密码',
-      layout: false,
-      loginPath: config.loginPath,
-    });
-  }
-
-  const admin = db.get('SELECT * FROM admins WHERE username = ?', [username]);
-  if (!admin) {
-    return res.render('login', {
-      title: '管理员登录',
-      error: '用户名或密码错误',
-      layout: false,
-      loginPath: config.loginPath,
-    });
-  }
-
-  const valid = bcrypt.compareSync(password, admin.password_hash);
-  if (!valid) {
-    return res.render('login', {
-      title: '管理员登录',
-      error: '用户名或密码错误',
-      layout: false,
-      loginPath: config.loginPath,
-    });
-  }
-
-  req.session.adminId = admin.id;
-  req.session.adminUsername = admin.username;
-  res.redirect('/admin/dashboard');
-});
-
-// 退出登录
-router.get('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.redirect('/admin' + config.loginPath);
-  });
-});
 
 // 仪表盘（需要登录）
 router.get('/dashboard', requireAuth, (req, res) => {

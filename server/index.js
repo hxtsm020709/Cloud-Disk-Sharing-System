@@ -41,6 +41,44 @@ async function start() {
     },
   }));
 
+  // 管理后台登录（根层级，隐藏入口）
+  const { redirectIfAuth } = require('./middleware/auth');
+  app.get(config.loginPath, redirectIfAuth, (req, res) => {
+    res.render('login', {
+      title: '管理员登录',
+      error: null,
+      layout: false,
+      loginPath: config.loginPath,
+    });
+  });
+  app.post(config.loginPath, redirectIfAuth, (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.render('login', {
+        title: '管理员登录',
+        error: '请输入用户名和密码',
+        layout: false,
+        loginPath: config.loginPath,
+      });
+    }
+    const bcrypt = require('bcrypt');
+    const adminRow = database.get('SELECT * FROM admins WHERE username = ?', [username]);
+    if (!adminRow || !bcrypt.compareSync(password, adminRow.password_hash)) {
+      return res.render('login', {
+        title: '管理员登录',
+        error: '用户名或密码错误',
+        layout: false,
+        loginPath: config.loginPath,
+      });
+    }
+    req.session.adminId = adminRow.id;
+    req.session.adminUsername = adminRow.username;
+    res.redirect('/admin/dashboard');
+  });
+  app.get('/admin/logout', (req, res) => {
+    req.session.destroy(() => res.redirect(config.loginPath));
+  });
+
   // 路由
   app.use('/admin', admin.router);
   app.use('/admin', accounts.router);

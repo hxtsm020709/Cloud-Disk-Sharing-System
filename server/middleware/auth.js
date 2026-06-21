@@ -7,7 +7,7 @@ function requireAuth(req, res, next) {
   if (req.path.startsWith('/api/')) {
     return res.status(401).json({ error: '请先登录' });
   }
-  res.redirect('/admin' + config.loginPath);
+  res.redirect(config.loginPath);
 }
 
 function redirectIfAuth(req, res, next) {
