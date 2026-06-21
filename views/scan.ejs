@@ -404,15 +404,19 @@
   </div>
   <div class="info-row">
     <span class="label">账号名称</span>
-    <span class="value"><%= accountName %></span>
+    <span class="value" id="infoAccountName"><%= accountName %></span>
+  </div>
+  <div class="info-row">
+    <span class="label">VIP 类型</span>
+    <span class="value" id="infoVipType"><%= accountVipType %></span>
   </div>
   <div class="info-row">
     <span class="label">已用次数</span>
-    <span class="value"><%= useCount %> / <%= maxUses %> 次</span>
+    <span class="value" id="infoUseCount"><%= useCount %> / <%= maxUses %> 次</span>
   </div>
   <div class="info-row">
     <span class="label">状态</span>
-    <span class="value"><span class="status-dot <%= statusClass %>"></span><%= statusText %></span>
+    <span class="value"><span class="status-dot <%= statusClass %>"></span><span id="infoStatus"><%= statusText %></span></span>
   </div>
 </div>
 
@@ -749,7 +753,6 @@ async function doConfirmScreenshot() {
 function refreshCardInfo(data) {
   if (data.remainingUses === undefined) return;
   var newCount = data.maxUses - data.remainingUses;
-  // 更新卡密信息中的已用次数和状态
   var rows = document.querySelectorAll('.card .info-row');
   for (var i = 0; i < rows.length; i++) {
     var label = rows[i].querySelector('.label');
@@ -762,6 +765,12 @@ function refreshCardInfo(data) {
       if (newCount >= data.maxUses) {
         valueEl.innerHTML = '<span class="status-dot dot-red"></span>已达上限';
       }
+    }
+    if (data.rotated && label.textContent === '账号名称') {
+      rows[i].querySelector('.value').textContent = data.rotatedTo;
+    }
+    if (data.rotated && data.rotatedVipType && label.textContent === 'VIP 类型') {
+      rows[i].querySelector('.value').textContent = data.rotatedVipType;
     }
   }
 }
