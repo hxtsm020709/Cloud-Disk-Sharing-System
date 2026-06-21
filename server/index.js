@@ -135,7 +135,7 @@ async function start() {
       return res.json({ success: false, message: `该链接已达到使用上限（${maxUses}次），已自动停用` });
     }
 
-    let account = db.get('SELECT * FROM accounts WHERE id = ? AND is_deleted = 0', [link.account_id]);
+    let account = db.get('SELECT * FROM accounts WHERE id = ? AND is_deleted = 0 AND is_paused = 0', [link.account_id]);
     if (!account) {
       return res.json({ success: false, message: '账号不可用，请联系管理员' });
     }
@@ -163,7 +163,7 @@ async function start() {
 
       console.log(`[confirm] 登录失败${isVerifyBlock ? '(验证拦截)' : isQrExpired ? '(QR过期)' : isQrRelated ? '(QR问题)' : ''}，尝试切换备用账号...`);
 
-      const allAccounts = db.all('SELECT * FROM accounts WHERE is_deleted = 0 AND id != ?', [link.account_id]);
+      const allAccounts = db.all('SELECT * FROM accounts WHERE is_deleted = 0 AND is_paused = 0 AND id != ?', [link.account_id]);
       let rotated = false;
 
       for (const acc of allAccounts) {
