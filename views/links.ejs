@@ -83,7 +83,7 @@
 
   <!-- 筛选栏 -->
   <form method="GET" action="/admin/links" style="display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;">
-    <input type="text" name="search" class="form-control" placeholder="搜索账号或 Token..." value="<%= typeof search !== 'undefined' ? search : '' %>" style="max-width: 220px;">
+    <input type="text" name="search" class="form-control" placeholder="搜索账号名称..." value="<%= typeof search !== 'undefined' ? search : '' %>" style="max-width: 220px;">
     <select name="status" class="form-control" style="max-width: 130px;">
       <option value="all" <%= (typeof status === 'undefined' || status === 'all') ? 'selected' : '' %>>全部状态</option>
       <option value="active" <%= status === 'active' ? 'selected' : '' %>>有效</option>
