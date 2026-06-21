@@ -36,7 +36,9 @@ router.get('/links', requireAuth, (req, res) => {
     sql += ' AND (a.nickname LIKE ? OR sl.token LIKE ?)';
     params.push(`%${search}%`, `%${search}%`);
   }
-  if (status && status !== 'all') {
+  if (status === 'pending') {
+    sql += " AND sl.status = 'active' AND sl.first_used_at IS NULL";
+  } else if (status && status !== 'all') {
     sql += ' AND sl.status = ?';
     params.push(status);
   }
@@ -101,7 +103,6 @@ router.post('/api/links/:id/disable', requireAuth, (req, res) => {
   res.json({ success: true, message: '链接已停用' });
 });
 
-// API: 批量删除已停用/过期链接
 // API: 批量停用链接
 router.post('/api/links/batch-disable', requireAuth, (req, res) => {
   const { ids } = req.body;
@@ -118,12 +119,13 @@ router.post('/api/links/batch-disable', requireAuth, (req, res) => {
 
 // API: 一键删除所有已停用/过期链接
 router.post('/api/links/delete-all-disabled', requireAuth, (req, res) => {
-  const result = db.run(
+  db.run(
     "DELETE FROM share_links WHERE status IN ('disabled', 'expired')"
   );
   res.json({ success: true, message: '已清理所有已停用和过期的链接' });
 });
 
+// API: 批量删除
 router.post('/api/links/batch-delete', requireAuth, (req, res) => {
   const { ids } = req.body;
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -138,9 +140,6 @@ router.post('/api/links/batch-delete', requireAuth, (req, res) => {
   res.json({ success: true, message: `已删除 ${ids.length} 条链接` });
 });
 
-/**
- * 计算账号使用负载：该账号在所有活跃分享池链接中的累计使用次数
- */
 function getAccountUsageScore(accountId) {
   const row = db.get(
     "SELECT COALESCE(SUM(use_count), 0) as total FROM share_links WHERE account_id = ? AND is_pool = 1 AND status = 'active'",
@@ -149,10 +148,6 @@ function getAccountUsageScore(accountId) {
   return row ? row.total : 0;
 }
 
-/**
- * 选出负载最低的有效账号
- * @param {number[]} excludeAccountIds — 排除的账号 ID 列表（如当前已失效的账号）
- */
 async function pickLeastUsedAccount(excludeAccountIds = []) {
   const { checkCookieValid } = require('../services/baidu-auth');
   const { decrypt } = require('../utils/crypto');
@@ -189,11 +184,6 @@ async function pickLeastUsedAccount(excludeAccountIds = []) {
   return best;
 }
 
-/**
- * 为指定账号的所有活跃分享池链接重新分配账号
- * 场景：账号被删除 / Cookie 过期时，及时给关联链接换新账号
- * @returns {{ reassigned: number, failed: number, details: Array }}
- */
 async function reassignPoolLinksForAccount(accountId) {
   const activeLinks = db.all(
     "SELECT * FROM share_links WHERE account_id = ? AND is_pool = 1 AND status = 'active'",
@@ -204,13 +194,13 @@ async function reassignPoolLinksForAccount(accountId) {
   const details = [];
   let reassigned = 0;
   let failed = 0;
-  const excludeIds = [accountId]; // 排除当前失效账号
+  const excludeIds = [accountId];
 
   for (const link of activeLinks) {
     const best = await pickLeastUsedAccount(excludeIds);
     if (best) {
       db.run('UPDATE share_links SET account_id = ? WHERE id = ?', [best.account.id, link.id]);
-      excludeIds.push(best.account.id); // 避免多个链接都换到同一账号
+      excludeIds.push(best.account.id);
       reassigned++;
       details.push({
         linkId: link.id,
@@ -261,23 +251,20 @@ router.post('/api/links/pool', requireAuth, async (req, res) => {
 router.post('/api/links/batch-pool', requireAuth, async (req, res) => {
   const { expire_hours, count } = req.body;
   const hours = parseInt(expire_hours) || 24;
-  const batchCount = Math.min(parseInt(count) || 1, 50); // 上限 50
+  const batchCount = Math.min(parseInt(count) || 1, 50);
 
   const d = new Date(Date.now() + hours * 3600000);
   const pad = n => String(n).padStart(2, '0');
   const expireAt = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
   const tokens = [];
-  const usedScores = {}; // 本次批量内临时累加
+  const usedScores = {};
 
   for (let i = 0; i < batchCount; i++) {
-    // 结合本次已分配的临时负载重新算分，按负载最低优先
     let best = await pickLeastUsedAccount([]);
     if (best) {
-      // 叠加上本轮已分配链接的临时负载
       const tempScore = usedScores[best.account.id] || 0;
       best.score = best.score + tempScore;
-      // 如果叠加后不是最优，重新找（考虑临时负载）
       if (tempScore > 0) {
         const allAccounts = db.all('SELECT * FROM accounts WHERE is_deleted = 0 AND is_paused = 0');
         let bestAcc = null;
@@ -323,7 +310,7 @@ router.post('/api/links/batch-pool', requireAuth, async (req, res) => {
   });
 });
 
-// API: 分享池 — 自动切换链接的账号（当 Cookie 失效时）
+// API: 分享池 — 自动切换链接的账号
 router.post('/api/links/:id/rotate-account', requireAuth, async (req, res) => {
   const { checkCookieValid } = require('../services/baidu-auth');
   const { decrypt } = require('../utils/crypto');
@@ -332,7 +319,6 @@ router.post('/api/links/:id/rotate-account', requireAuth, async (req, res) => {
   const link = db.get('SELECT * FROM share_links WHERE id = ? AND status = \'active\'', [linkId]);
   if (!link) return res.json({ success: false, message: '链接不存在或已失效' });
 
-  // 检测当前关联账号是否还有效
   const currentAccount = db.get('SELECT * FROM accounts WHERE id = ? AND is_deleted = 0', [link.account_id]);
   if (currentAccount) {
     try {
@@ -345,7 +331,6 @@ router.post('/api/links/:id/rotate-account', requireAuth, async (req, res) => {
     } catch(e) {}
   }
 
-  // 找其他有效账号
   const allAccounts = db.all('SELECT * FROM accounts WHERE is_deleted = 0 AND is_paused = 0 AND id != ?', [link.account_id]);
   for (const acc of allAccounts) {
     try {
@@ -369,7 +354,7 @@ router.get('/api/links/export', requireAuth, (req, res) => {
   const status = req.query.status || '';
 
   let sql = `
-    SELECT sl.token, a.nickname, sl.is_pool, sl.expire_hours, sl.expire_at,
+    SELECT sl.token, a.nickname, sl.is_pool, sl.first_used_at, sl.expire_hours, sl.expire_at,
            sl.use_count, sl.max_uses, sl.status, sl.created_at
     FROM share_links sl
     LEFT JOIN accounts a ON sl.account_id = a.id
@@ -377,7 +362,9 @@ router.get('/api/links/export', requireAuth, (req, res) => {
   `;
   const params = [];
 
-  if (status && status !== 'all') {
+  if (status === 'pending') {
+    sql += " AND sl.status = 'active' AND sl.first_used_at IS NULL";
+  } else if (status && status !== 'all') {
     sql += ' AND sl.status = ?';
     params.push(status);
   }
@@ -391,8 +378,9 @@ router.get('/api/links/export', requireAuth, (req, res) => {
   const rows = links.map(l => {
     const url = `https://yunpan.up.railway.app/s/${l.token}`;
     const type = l.is_pool === 1 ? '分享池' : '独享';
+    const isPending = l.first_used_at === null && l.status === 'active';
     const statusMap = { active: '有效', expired: '已过期', disabled: '已停用' };
-    const statusName = statusMap[l.status] || l.status;
+    const statusName = isPending ? '待使用' : (statusMap[l.status] || l.status);
     return [url, l.nickname || '', type, l.expire_hours, l.expire_at || '', l.use_count, l.max_uses || 20, statusName, l.created_at || '']
       .map(v => '"' + String(v).replace(/"/g, '""') + '"')
       .join(',');
@@ -427,7 +415,6 @@ router.get('/api/links/pool-stats', requireAuth, async (req, res) => {
     });
   }
 
-  // 按负载升序排列（最低负载在前 = 下次优先分配）
   stats.sort((a, b) => a.usageScore - b.usageScore);
 
   const totalLinks = db.get("SELECT COUNT(*) as count FROM share_links WHERE is_pool = 1 AND status = 'active'");

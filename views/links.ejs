@@ -88,7 +88,8 @@
       <option value="all" <%= (typeof status === 'undefined' || status === 'all') ? 'selected' : '' %>>全部状态</option>
       <option value="active" <%= status === 'active' ? 'selected' : '' %>>有效</option>
       <option value="expired" <%= status === 'expired' ? 'selected' : '' %>>已过期</option>
-      <option value="disabled" <%= status === 'disabled' ? 'selected' : '' %>>未启用</option>
+      <option value="disabled" <%= status === 'disabled' ? 'selected' : '' %>>已停用</option>
+      <option value="pending" <%= status === 'pending' ? 'selected' : '' %>>待使用</option>
     </select>
     <select name="pool" class="form-control" style="max-width: 120px;">
       <option value="" <%= (typeof poolType === 'undefined' || poolType === '') ? 'selected' : '' %>>全部类型</option>
@@ -116,7 +117,8 @@
       <option value="all">全部状态</option>
       <option value="active">有效</option>
       <option value="expired">已过期</option>
-      <option value="disabled">未启用</option>
+      <option value="disabled">已停用</option>
+      <option value="pending">待使用</option>
     </select>
     <button class="btn btn-sm btn-primary" onclick="exportLinks()">导出 CSV</button>
   </div>
