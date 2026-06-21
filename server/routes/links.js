@@ -349,9 +349,10 @@ router.post('/api/links/:id/rotate-account', requireAuth, async (req, res) => {
   res.json({ success: false, message: '没有其他可用账号，所有 Cookie 均已失效' });
 });
 
-// API: 导出链接为 CSV
+// API: 导出链接（CSV / TXT）
 router.get('/api/links/export', requireAuth, (req, res) => {
   const status = req.query.status || '';
+  const format = req.query.format || 'csv';
 
   let sql = `
     SELECT sl.token, a.nickname, sl.is_pool, sl.first_used_at, sl.expire_hours, sl.expire_at,
@@ -372,6 +373,15 @@ router.get('/api/links/export', requireAuth, (req, res) => {
   sql += ' ORDER BY sl.created_at DESC';
 
   const links = db.all(sql, params);
+
+  if (format === 'txt') {
+    const lines = links.map(l => `https://yunpan.up.railway.app/s/${l.token}`);
+    const txt = lines.join('\n');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="links_export_${Date.now()}.txt"`);
+    res.send(txt);
+    return;
+  }
 
   const BOM = '﻿';
   const header = '链接地址,账号,类型,有效期(小时),到期时间,使用次数,最大次数,状态,创建时间';

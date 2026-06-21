@@ -112,7 +112,10 @@
     <button class="btn btn-sm btn-danger" onclick="batchDisable()">批量停用</button>
     <button class="btn btn-sm btn-danger" onclick="batchDelete()">批量删除</button>
     <button class="btn btn-sm btn-danger" onclick="deleteAllDisabled()">删除所有已停用/过期</button>
-    <span style="width: 1px; background: #ddd; height: 24px; margin: 0 4px;"></span>
+  </div>
+  <!-- 导出区域 -->
+  <div style="border-top: 1px dashed #d9d9d9; padding-top: 10px; margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
+    <span style="font-size: 13px; color: #999;">导出链接：</span>
     <select id="exportStatus" class="form-control" style="max-width: 100px;">
       <option value="all">全部状态</option>
       <option value="active">有效</option>
@@ -120,7 +123,8 @@
       <option value="disabled">已停用</option>
       <option value="pending">待使用</option>
     </select>
-    <button class="btn btn-sm btn-primary" onclick="exportLinks()">导出 CSV</button>
+    <button class="btn btn-sm btn-primary" onclick="exportLinks('csv')">导出 CSV</button>
+    <button class="btn btn-sm btn-primary" onclick="exportLinks('txt')">导出 TXT</button>
   </div>
   <% } %>
   <% if (links.length === 0) { %>
@@ -313,11 +317,12 @@ async function batchDelete() {
 }
 
 // === 导出功能 ===
-function exportLinks() {
+function exportLinks(format) {
   var status = document.getElementById('exportStatus').value;
-  var url = '/admin/api/links/export';
-  if (status) url += '?status=' + status;
-  window.location.href = url;
+  var params = [];
+  if (status) params.push('status=' + status);
+  params.push('format=' + (format || 'csv'));
+  window.location.href = '/admin/api/links/export?' + params.join('&');
 }
 
 // ======== 生成分享池链接 ========
