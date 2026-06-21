@@ -78,9 +78,23 @@ async function start() {
 
     let statusText = '正常';
     let statusClass = 'dot-green';
-    if (link.status === 'expired') { statusText = '已过期'; statusClass = 'dot-yellow'; }
-    else if (link.status === 'disabled') { statusText = '已停用'; statusClass = 'dot-red'; }
-    else if (link.use_count >= (link.max_uses || 20)) { statusText = '已达上限'; statusClass = 'dot-red'; }
+    // 账号级别状态优先
+    if (account && account.is_paused === 1) {
+      statusText = '被管理员停用';
+      statusClass = 'dot-red';
+    } else if (account && account.cookie_status === 'expired') {
+      statusText = 'Cookie已失效';
+      statusClass = 'dot-red';
+    } else if (link.status === 'expired') {
+      statusText = '链接已过期';
+      statusClass = 'dot-yellow';
+    } else if (link.status === 'disabled') {
+      statusText = '已停用';
+      statusClass = 'dot-red';
+    } else if (link.use_count >= (link.max_uses || 20)) {
+      statusText = '已达上限';
+      statusClass = 'dot-red';
+    }
 
     const settings = db.getAllSettings();
 
@@ -97,6 +111,8 @@ async function start() {
       linkStatus: link.status,
       statusText: statusText,
       statusClass: statusClass,
+      accountPaused: account ? (account.is_paused === 1) : false,
+      accountCookieExpired: account ? (account.cookie_status === 'expired') : false,
       settings: settings,
     });
   });

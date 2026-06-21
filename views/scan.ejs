@@ -418,7 +418,7 @@
 
 <!-- 核心按钮 -->
 <div class="main-btn-wrap">
-  <% if (linkStatus === 'active') { %>
+  <% if (linkStatus === 'active' && !accountPaused && !accountCookieExpired) { %>
   <button class="main-btn" onclick="openScanner()">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M4 4h6v6H4z"/><path d="M14 4h6v6h-6z"/><path d="M4 14h6v6H4z"/><circle cx="17" cy="17" r="3"/></svg>
     PC端/平板 点我扫码登录
