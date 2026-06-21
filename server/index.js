@@ -89,8 +89,6 @@ async function start() {
       token: link.token,
       accountId: link.account_id,
       accountName: account ? account.nickname : '未知',
-      accountVipType: account ? (account.vip_type || '--') : '--',
-      accountCookieStatus: account ? (account.cookie_status || 'unknown') : 'unknown',
       expireAt: link.first_used_at
         ? (link.expire_at ? link.expire_at.slice(0, 16) : '--')
         : ('首次使用后 ' + (link.expire_hours || 24) + ' 小时内有效'),
@@ -191,7 +189,6 @@ async function start() {
       if (rotated) {
         result.rotated = true;
         result.rotatedTo = account.nickname;
-        result.rotatedVipType = account.vip_type;
       } else if (!result.success) {
         if (isQrExpired || isQrRelated) {
           result.message = '二维码已过期，请刷新PC端百度网盘登录页面获取新二维码后重新扫码';
