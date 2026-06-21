@@ -353,6 +353,7 @@ router.post('/api/links/:id/rotate-account', requireAuth, async (req, res) => {
 router.get('/api/links/export', requireAuth, (req, res) => {
   const status = req.query.status || '';
   const format = req.query.format || 'csv';
+  const expireHours = parseInt(req.query.expire_hours) || 0;
 
   let sql = `
     SELECT sl.token, a.nickname, sl.is_pool, sl.first_used_at, sl.expire_hours, sl.expire_at,
@@ -368,6 +369,11 @@ router.get('/api/links/export', requireAuth, (req, res) => {
   } else if (status && status !== 'all') {
     sql += ' AND sl.status = ?';
     params.push(status);
+  }
+
+  if (expireHours > 0) {
+    sql += ' AND sl.expire_hours = ?';
+    params.push(expireHours);
   }
 
   sql += ' ORDER BY sl.created_at DESC';

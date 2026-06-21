@@ -114,7 +114,7 @@
     <button class="btn btn-sm btn-danger" onclick="deleteAllDisabled()">删除所有已停用/过期</button>
   </div>
   <!-- 导出区域 -->
-  <div style="border-top: 1px dashed #d9d9d9; padding-top: 10px; margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
+  <div style="border-top: 1px dashed #d9d9d9; padding-top: 10px; margin-bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
     <span style="font-size: 13px; color: #999;">导出链接：</span>
     <select id="exportStatus" class="form-control" style="max-width: 100px;">
       <option value="all">全部状态</option>
@@ -122,6 +122,12 @@
       <option value="expired">已过期</option>
       <option value="disabled">已停用</option>
       <option value="pending">待使用</option>
+    </select>
+    <select id="exportHours" class="form-control" style="max-width: 100px;">
+      <option value="">全部时长</option>
+      <% expireOptions.forEach(function(opt) { %>
+        <option value="<%= opt.hours %>"><%= opt.label %></option>
+      <% }); %>
     </select>
     <button class="btn btn-sm btn-primary" onclick="exportLinks('csv')">导出 CSV</button>
     <button class="btn btn-sm btn-primary" onclick="exportLinks('txt')">导出 TXT</button>
@@ -319,8 +325,10 @@ async function batchDelete() {
 // === 导出功能 ===
 function exportLinks(format) {
   var status = document.getElementById('exportStatus').value;
+  var hours = document.getElementById('exportHours').value;
   var params = [];
   if (status) params.push('status=' + status);
+  if (hours) params.push('expire_hours=' + hours);
   params.push('format=' + (format || 'csv'));
   window.location.href = '/admin/api/links/export?' + params.join('&');
 }
