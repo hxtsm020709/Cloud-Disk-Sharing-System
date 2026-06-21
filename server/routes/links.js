@@ -22,7 +22,7 @@ router.get('/links', requireAuth, (req, res) => {
 
   const search = req.query.search || '';
   const status = req.query.status || '';
-  const poolType = req.query.pool || 'pool';
+  const poolType = 'pool' in req.query ? req.query.pool : 'pool';
 
   let sql = `
     SELECT sl.*, a.nickname as account_nickname
