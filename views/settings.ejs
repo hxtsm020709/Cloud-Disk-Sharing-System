@@ -1,0 +1,67 @@
+<div class="flex-between mb-16">
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <a href="/admin/dashboard" class="btn btn-secondary btn-sm">&larr; 返回首页</a>
+    <h2 style="font-size: 20px; margin: 0;">系统设置</h2>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">使用教程链接</div>
+  <p style="color: #999; font-size: 13px; margin-bottom: 16px;">设置员工端「使用教程」区域各按钮点击后跳转的链接。留空则显示默认提示。</p>
+  <form id="settingsForm">
+    <div class="form-group">
+      <label>安卓教程链接</label>
+      <input type="url" name="tutorial_android" class="form-control" value="<%= settings.tutorial_android || '' %>" placeholder="https://example.com/android-guide">
+    </div>
+    <div class="form-group">
+      <label>电脑教程链接</label>
+      <input type="url" name="tutorial_pc" class="form-control" value="<%= settings.tutorial_pc || '' %>" placeholder="https://example.com/pc-guide">
+    </div>
+    <div class="form-group">
+      <label>苹果教程链接</label>
+      <input type="url" name="tutorial_apple" class="form-control" value="<%= settings.tutorial_apple || '' %>" placeholder="https://example.com/ios-guide">
+    </div>
+
+    <div class="card-title" style="margin-top: 24px;">温馨提示</div>
+    <p style="color: #999; font-size: 13px; margin-bottom: 16px;">设置员工端「温馨提示」卡片的提示内容，支持多条提示，每条一行。</p>
+    <div class="form-group">
+      <label>提示内容</label>
+      <textarea name="tips_content" class="form-control" rows="6" placeholder="如遇到电脑端扫码未跳转，需要退出应用重新进入再次扫码
+如遇到账号掉线或Cookie失效，可稍等10分钟后再试，后台自动登录中"><%= settings.tips_content || '' %></textarea>
+      <span style="font-size: 12px; color: #999;">每条提示占一行，将自动编号显示。</span>
+    </div>
+
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <button type="submit" class="btn btn-primary">保存设置</button>
+      <span id="saveMsg" style="font-size: 13px;"></span>
+    </div>
+  </form>
+</div>
+
+<script>
+document.getElementById('settingsForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var msg = document.getElementById('saveMsg');
+  msg.textContent = '保存中...';
+  msg.style.color = '#999';
+
+  try {
+    var res = await fetch('/admin/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tutorial_android: this.tutorial_android.value.trim(),
+        tutorial_pc: this.tutorial_pc.value.trim(),
+        tutorial_apple: this.tutorial_apple.value.trim(),
+        tips_content: this.tips_content.value.trim(),
+      })
+    });
+    var data = await res.json();
+    msg.textContent = data.message;
+    msg.style.color = data.success ? '#52C41A' : '#FF4D4F';
+  } catch(e) {
+    msg.textContent = '网络错误';
+    msg.style.color = '#FF4D4F';
+  }
+});
+</script>

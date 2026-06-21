@@ -1,0 +1,271 @@
+<div class="flex-between" style="margin-bottom: 20px;">
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <a href="/admin/accounts" class="btn btn-secondary btn-sm">&larr; 返回账号列表</a>
+    <h2 style="font-size: 20px; margin: 0;">添加账号</h2>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab-item active" onclick="switchTab('manual', this)">手动导入</div>
+  <div class="tab-item" onclick="switchTab('scan', this)">扫码提取</div>
+</div>
+
+<!-- 手动导入 -->
+<div id="tab-manual" class="card">
+  <form id="addAccountForm">
+    <div class="form-group">
+      <label>备注 <span style="color:#FF4D4F;">*</span></label>
+      <input type="text" name="notes" class="form-control" placeholder="例如：公司共享账号" required>
+    </div>
+
+    <div class="form-group">
+      <label>昵称 <span style="color:#999; font-size: 12px;">(自动获取)</span></label>
+      <input type="text" name="nickname" class="form-control" placeholder="留空则自动从 Cookie 获取昵称">
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <div class="form-group">
+        <label>手机号 <span style="color:#999; font-size: 12px;">(自动获取)</span></label>
+        <input type="text" name="phone" class="form-control" placeholder="留空则自动获取">
+      </div>
+      <div class="form-group">
+        <label>会员类型 <span style="color:#999; font-size: 12px;">(自动获取)</span></label>
+        <select name="vip_type" class="form-control">
+          <option value="">自动检测</option>
+          <option value="svip">SVIP（超级会员）</option>
+          <option value="vip">VIP（普通会员）</option>
+          <option value="normal">普通账号</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>会员到期日期 <span style="color:#999; font-size: 12px;">(自动获取)</span></label>
+      <input type="date" name="vip_expire_date" class="form-control" placeholder="留空则自动获取">
+    </div>
+
+    <div class="form-group">
+      <label>Cookie <span style="color:#FF4D4F;">*</span></label>
+      <textarea name="cookie_text" class="form-control" rows="6" placeholder="粘贴从浏览器复制的完整 Cookie 字符串..." required style="resize: vertical;"></textarea>
+      <div class="alert alert-info" style="margin-top: 8px;">
+        <strong>如何获取 Cookie？</strong><br>
+        1. 在浏览器中登录网盘（pan.baidu.com）<br>
+        2. 按 F12 打开开发者工具，切换到 Application（应用程序）标签<br>
+        3. 左侧找到 Cookies → pan.baidu.com<br>
+        4. 复制所有 Cookie 的 Name=Value，用分号隔开<br>
+        例如：<code>BDUSS=xxx; STOKEN=xxx; BAIDUID=xxx</code>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 12px;">
+      <button type="submit" class="btn btn-primary">保存账号</button>
+      <a href="/admin/accounts" class="btn btn-secondary">取消</a>
+    </div>
+    <span id="formMsg" style="margin-left: 12px; font-size: 13px;"></span>
+  </form>
+</div>
+
+<!-- 扫码提取 -->
+<div id="tab-scan" class="card" style="display: none;">
+  <div id="scanInit">
+    <p style="color: #666; margin-bottom: 16px;">点击下方按钮生成网盘登录二维码，然后用<strong>手机网盘 App</strong>扫描。</p>
+    <button class="btn btn-primary" onclick="startScan()">生成二维码</button>
+    <span id="scanMsg" style="margin-left: 12px; font-size: 13px;"></span>
+  </div>
+
+  <div id="scanProgress" style="display: none; text-align: center;">
+    <div id="qrcodeContainer" style="display: inline-block; border: 2px solid #E8E8E8; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+      <img id="qrcodeImg" src="" alt="登录二维码" style="max-width: 200px; display: block;">
+    </div>
+    <div id="scanStatus" style="margin-bottom: 12px;">
+      <span class="tag tag-default">等待扫码...</span>
+    </div>
+    <p id="scanHint" style="color: #999; font-size: 13px;">请使用手机网盘 App 扫描上方二维码</p>
+    <div id="scanDebug" style="color: #999; font-size: 11px; margin-top: 12px; word-break: break-all; white-space: pre-wrap; max-height: 200px; overflow-y: auto; background: #F5F5F5; padding: 8px; border-radius: 4px; text-align: left; line-height: 1.5;"></div>
+    <button class="btn btn-sm btn-secondary" onclick="resetScan()" style="margin-top: 12px;">重新生成</button>
+  </div>
+</div>
+
+<script>
+let pollTimer = null;
+let pollCount = 0;
+
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab-item').forEach(function(t) { t.classList.remove('active'); });
+  el.classList.add('active');
+  document.getElementById('tab-manual').style.display = tab === 'manual' ? '' : 'none';
+  document.getElementById('tab-scan').style.display = tab === 'scan' ? '' : 'none';
+  if (tab === 'manual') stopPoll();
+}
+
+async function startScan() {
+  const msg = document.getElementById('scanMsg');
+  msg.textContent = '请求中...';
+  msg.style.color = '#999';
+
+  const res = await fetch('/admin/api/qrcode/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const data = await res.json();
+
+  if (!data.success) {
+    msg.textContent = (data.message || '生成失败') + (data._debug ? ' [' + data._debug + ']' : '');
+    msg.style.color = '#FF4D4F';
+    return;
+  }
+
+  document.getElementById('scanInit').style.display = 'none';
+  document.getElementById('scanProgress').style.display = '';
+
+  // 显示调试信息
+  document.getElementById('scanDebug').textContent = '请求成功 | ' + (data._debug || '');
+
+  // 加载二维码图片：优先 base64，其次代理URL，最后自行生成
+  if (data.qrcodeBase64) {
+    document.getElementById('qrcodeImg').src = data.qrcodeBase64;
+  } else if (data.imgurl) {
+    document.getElementById('qrcodeImg').src = '/admin/api/qrcode/img?url=' + encodeURIComponent(data.imgurl);
+  } else if (data.scanUrl) {
+    document.getElementById('qrcodeImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(data.scanUrl);
+  }
+
+  // 开始轮询
+  pollQR(data.sign);
+}
+
+function pollQR(sign) {
+  pollCount = 0;
+  document.getElementById('scanStatus').innerHTML = '<span class="tag tag-default">等待扫码...</span>';
+  document.getElementById('scanHint').textContent = '请使用手机网盘 App 扫描上方二维码';
+  document.getElementById('scanDebug').textContent = '轮询中...';
+
+  pollTimer = setInterval(async function() {
+    pollCount++;
+    const res = await fetch('/admin/api/qrcode/poll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sign: sign }),
+    });
+    const data = await res.json();
+
+    // 显示详细调试信息
+    var debugStr = '';
+    if (data._debug) {
+      try {
+        debugStr = JSON.stringify(data._debug, null, 1);
+      } catch(e) {
+        debugStr = String(data._debug);
+      }
+      // 截断过长内容
+      if (debugStr.length > 500) debugStr = debugStr.slice(0, 500) + '...';
+    }
+    var statusExtra = data.status || '?';
+    if (data.message) statusExtra += ' | ' + data.message;
+    document.getElementById('scanDebug').textContent = '#' + pollCount + ' [' + statusExtra + '] ' + debugStr;
+
+    if (data.status === 'scanned') {
+      document.getElementById('scanStatus').innerHTML = '<span class="tag tag-warning">已扫描，请在手机上确认登录</span>';
+      document.getElementById('scanHint').textContent = '请在手机网盘 App 上点击「确认登录」';
+    } else if (data.status === 'confirmed') {
+      stopPoll();
+      document.getElementById('scanStatus').innerHTML = '<span class="tag tag-success">提取成功！正在保存...</span>';
+      document.getElementById('scanHint').textContent = '';
+
+      if (!data.cookieStr) {
+        document.getElementById('scanStatus').innerHTML = '<span class="tag tag-danger">提取失败：未获取到Cookie</span>';
+        document.getElementById('scanHint').textContent = '确认成功但未提取到Cookie数据，请查看调试信息';
+        document.getElementById('scanDebug').textContent = 'confirmed but no cookieStr — response keys: ' + (data._debug ? JSON.stringify(data._debug).slice(0, 200) : 'none');
+        return;
+      }
+
+      // 保存 Cookie
+      const saveRes = await fetch('/admin/api/accounts/from-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cookie_text: data.cookieStr }),
+      });
+      const saveData = await saveRes.json();
+      if (saveData.success) {
+        document.getElementById('scanHint').textContent = '账号「' + (saveData.nickname || '导入') + '」已保存，即将跳转...';
+        setTimeout(function() { location.href = '/admin/accounts/' + saveData.accountId; }, 1500);
+      } else {
+        document.getElementById('scanStatus').innerHTML = '<span class="tag tag-danger">保存失败</span>';
+        document.getElementById('scanHint').textContent = saveData.message;
+        document.getElementById('scanDebug').textContent = 'save error: ' + JSON.stringify(saveData);
+      }
+    } else if (data.status === 'expired') {
+      stopPoll();
+      document.getElementById('scanStatus').innerHTML = '<span class="tag tag-danger">二维码已过期</span>';
+      document.getElementById('scanHint').textContent = '请点击下方按钮重新生成';
+    } else if (data.status === 'error') {
+      document.getElementById('scanHint').textContent = '轮询出错: ' + (data.message || '未知错误');
+    }
+  }, 2000);
+}
+
+function stopPoll() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+function resetScan() {
+  stopPoll();
+  document.getElementById('scanInit').style.display = '';
+  document.getElementById('scanProgress').style.display = 'none';
+  document.getElementById('qrcodeImg').src = '';
+  document.getElementById('scanMsg').textContent = '';
+}
+
+document.getElementById('addAccountForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const form = e.target;
+  const msg = document.getElementById('formMsg');
+  const submitBtn = form.querySelector('button[type="submit"]');
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = '保存中...';
+  msg.textContent = '';
+  msg.style.color = '#999';
+
+  try {
+    const body = {
+      notes: form.notes.value,
+      nickname: form.nickname.value,
+      phone: form.phone.value,
+      vip_type: form.vip_type.value,
+      vip_expire_date: form.vip_expire_date.value,
+      cookie_text: form.cookie_text.value,
+    };
+
+    const res = await fetch('/admin/api/accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    msg.textContent = data.message;
+    msg.style.color = data.success ? '#52C41A' : '#FF4D4F';
+
+    if (data.success) {
+      // 显示自动检测结果
+      var extra = [];
+      if (data.cookieMsg) extra.push('Cookie: ' + (data.cookieStatus === 'valid' ? '有效' : '已过期'));
+      if (data.vipType) extra.push('会员: ' + data.vipType.toUpperCase());
+      if (data.expireDate) extra.push('到期: ' + data.expireDate);
+      if (extra.length > 0) {
+        var infoEl = document.createElement('p');
+        infoEl.style.cssText = 'margin-top:8px;font-size:13px;color:#52C41A;';
+        infoEl.textContent = '自动检测: ' + extra.join(' | ');
+        msg.parentNode.insertBefore(infoEl, msg.nextSibling);
+      }
+      setTimeout(function() { location.href = '/admin/accounts/' + data.accountId; }, 2000);
+    }
+  } catch (err) {
+    msg.textContent = '提交失败: ' + (err.message || '网络错误');
+    msg.style.color = '#FF4D4F';
+  }
+  submitBtn.disabled = false;
+  submitBtn.textContent = '保存账号';
+});
+</script>

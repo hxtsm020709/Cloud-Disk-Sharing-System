@@ -1,0 +1,364 @@
+<div class="flex-between mb-16">
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <a href="/admin/dashboard" class="btn btn-secondary btn-sm">&larr; 返回首页</a>
+    <h2 style="font-size: 20px; margin: 0;">账号管理</h2>
+  </div>
+  <div style="display: flex; gap: 8px;">
+    <button class="btn btn-secondary btn-sm" onclick="checkAllCookies()">批量检测</button>
+    <button class="btn btn-secondary btn-sm" onclick="fetchAllVip()" id="fetchVipBtn">批量抓取账号信息</button>
+    <a href="/admin/accounts/add" class="btn btn-primary">+ 添加账号</a>
+  </div>
+</div>
+
+<!-- 筛选栏 -->
+<div class="card">
+  <form method="GET" action="/admin/accounts" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+    <input type="text" name="search" class="form-control" placeholder="搜索昵称或手机号..." value="<%= typeof search !== 'undefined' ? search : '' %>" style="max-width: 260px;">
+    <select name="status" class="form-control" style="max-width: 140px;">
+      <option value="all" <%= status === 'all' || !status ? 'selected' : '' %>>全部状态</option>
+      <option value="valid" <%= status === 'valid' ? 'selected' : '' %>>Cookie 有效</option>
+      <option value="expired" <%= status === 'expired' ? 'selected' : '' %>>Cookie 过期</option>
+      <option value="unknown" <%= status === 'unknown' ? 'selected' : '' %>>状态未知</option>
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm">筛选</button>
+    <% if (search || (status && status !== 'all')) { %>
+      <a href="/admin/accounts" class="btn btn-secondary btn-sm">清除</a>
+    <% } %>
+  </form>
+</div>
+
+<!-- 账号列表 -->
+<% if (accounts.length === 0) { %>
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-icon">&#128230;</div>
+    <p>还没有添加任何账号</p>
+    <a href="/admin/accounts/add" class="btn btn-primary mt-16">添加第一个账号</a>
+  </div>
+</div>
+<% } else { %>
+
+<!-- 批量操作栏 -->
+<div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
+  <button class="btn btn-sm btn-secondary" onclick="selectExpired()">全选已停用/过期</button>
+  <button class="btn btn-sm btn-secondary" onclick="selectAll()">全选所有</button>
+  <button class="btn btn-sm btn-secondary" onclick="clearSelection()">取消全选</button>
+  <span style="flex:1;"></span>
+  <span id="selectedCount" style="font-size: 13px; color: #999;"></span>
+  <button class="btn btn-sm btn-danger" onclick="batchDelete()">批量删除选中</button>
+</div>
+
+<div class="card" style="padding: 0;">
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 40px;">
+            <input type="checkbox" id="selectAllCheckbox" onclick="toggleSelectAll(this)" title="全选/取消全选">
+          </th>
+          <th>昵称</th>
+          <th>备注</th>
+          <th>手机号</th>
+          <th>会员类型</th>
+          <th>到期时间</th>
+          <th>Cookie 状态</th>
+          <th>更新时间</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% accounts.forEach(function(acc) { %>
+        <tr>
+          <td>
+            <input type="checkbox" class="account-checkbox" data-id="<%= acc.id %>" data-status="<%= acc.cookie_status %>" onchange="updateSelection()">
+          </td>
+          <td><strong><%= acc.nickname %></strong>
+            <% if (acc.is_paused) { %><span class="tag tag-danger" style="font-size:10px;margin-left:4px;">已暂停</span><% } %>
+          </td>
+          <td style="font-size:12px;color:#666;"><%= acc.notes || '--' %></td>
+          <td><%= maskPhone(acc.phone) %></td>
+          <td>
+            <% if (acc.vip_type === 'svip') { %>
+              <span class="tag tag-warning">SVIP</span>
+            <% } else if (acc.vip_type === 'vip') { %>
+              <span class="tag tag-default">VIP</span>
+            <% } else if (acc.vip_type === 'normal') { %>
+              <span class="tag tag-default">普通</span>
+            <% } else { %>
+              --
+            <% } %>
+          </td>
+          <td>
+            <% if (acc.vip_expire_date) { %>
+              <%= acc.vip_expire_date %>
+            <% } else { %>
+              --
+            <% } %>
+          </td>
+          <td id="status-<%= acc.id %>">
+            <% if (acc.cookie_status === 'valid') { %>
+              <span class="tag tag-success">有效</span>
+            <% } else if (acc.cookie_status === 'expired') { %>
+              <span class="tag tag-danger">过期</span>
+            <% } else { %>
+              <span class="tag tag-default">未知</span>
+            <% } %>
+          </td>
+          <td><%= acc.updated_at ? acc.updated_at.slice(0, 16) : '--' %></td>
+          <td>
+            <a href="/admin/accounts/<%= acc.id %>" class="btn btn-sm btn-secondary">详情</a>
+            <button class="btn btn-sm btn-secondary" onclick="checkCookie(<%= acc.id %>)" id="btn-<%= acc.id %>">检测</button>
+            <button class="btn btn-sm btn-secondary" onclick="togglePause(<%= acc.id %>)" id="pause-<%= acc.id %>"><%= acc.is_paused ? '恢复' : '暂停' %></button>
+            <button class="btn btn-sm btn-danger" onclick="deleteAccount(<%= acc.id %>, '<%= acc.nickname %>')">删除</button>
+          </td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</div>
+<% } %>
+
+<script>
+// === 选择功能 ===
+function updateSelection() {
+  var checked = document.querySelectorAll('.account-checkbox:checked');
+  var count = checked.length;
+  document.getElementById('selectedCount').textContent = count > 0 ? '已选择 ' + count + ' 个账号' : '';
+
+  var all = document.querySelectorAll('.account-checkbox');
+  var selectAll = document.getElementById('selectAllCheckbox');
+  selectAll.checked = all.length > 0 && checked.length === all.length;
+  selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
+}
+
+function toggleSelectAll(el) {
+  var checkboxes = document.querySelectorAll('.account-checkbox');
+  checkboxes.forEach(function(cb) { cb.checked = el.checked; });
+  updateSelection();
+}
+
+function selectAll() {
+  document.querySelectorAll('.account-checkbox').forEach(function(cb) { cb.checked = true; });
+  updateSelection();
+}
+
+function clearSelection() {
+  document.querySelectorAll('.account-checkbox').forEach(function(cb) { cb.checked = false; });
+  updateSelection();
+}
+
+function selectExpired() {
+  document.querySelectorAll('.account-checkbox').forEach(function(cb) {
+    cb.checked = cb.dataset.status !== 'valid';
+  });
+  updateSelection();
+}
+
+function getSelectedIds() {
+  var ids = [];
+  document.querySelectorAll('.account-checkbox:checked').forEach(function(cb) {
+    ids.push(parseInt(cb.dataset.id));
+  });
+  return ids;
+}
+
+// === 批量删除 ===
+async function batchDelete() {
+  var ids = getSelectedIds();
+  if (ids.length === 0) {
+    alert('请先勾选要删除的账号');
+    return;
+  }
+
+  // 查询所有选中账号的依赖链接
+  var totalPool = 0, totalSolo = 0;
+  for (var id of ids) {
+    try {
+      var depRes = await fetch('/admin/api/accounts/' + id + '/dependent-links');
+      var dep = await depRes.json();
+      totalPool += dep.poolCount || 0;
+      totalSolo += dep.soloCount || 0;
+    } catch(e) {}
+  }
+
+  var msg = '确定要删除选中的 ' + ids.length + ' 个账号吗？';
+  if (totalPool > 0) msg += '\n\n⚠ ' + totalPool + ' 个分享池链接将自动切换账号。';
+  if (totalSolo > 0) msg += '\n\n⚠ ' + totalSolo + ' 个独享链接将失效。';
+  msg += '\n\n删除后可在数据库中恢复。';
+
+  if (!confirm(msg)) return;
+
+  try {
+    var res = await fetch('/admin/api/accounts/batch-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: ids })
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert(data.message);
+      location.reload();
+    } else {
+      alert(data.message);
+    }
+  } catch(e) {
+    alert('批量删除失败: ' + (e.message || e));
+  }
+}
+
+// === 单账号 Cookie 检测 ===
+async function checkCookie(id) {
+  var btn = document.getElementById('btn-' + id);
+  var statusCell = document.getElementById('status-' + id);
+  btn.disabled = true;
+  btn.textContent = '检测中...';
+  statusCell.innerHTML = '<span class="tag tag-default">检测中...</span>';
+
+  try {
+    var res = await fetch('/admin/api/accounts/' + id + '/check-cookie', { method: 'POST' });
+    var data = await res.json();
+    if (data.success && data.result) {
+      var r = data.result;
+      var html = r.valid
+        ? '<span class="tag tag-success">有效</span>' + (r.username ? ' <small>' + r.username + '</small>' : '') + (r.vipType ? ' <small>' + r.vipType.toUpperCase() + '</small>' : '')
+        : '<span class="tag tag-danger">过期</span>';
+      if (data.poolLinksReassigned > 0) {
+        html += ' <small style="color:#FAAD14;">(' + data.poolLinksReassigned + ' 链接已切换)</small>';
+        alert('检测到 Cookie 过期，已自动将 ' + data.poolLinksReassigned + ' 个关联链接切换到其他账号');
+      }
+      statusCell.innerHTML = html;
+    } else {
+      statusCell.innerHTML = '<span class="tag tag-danger">检测失败</span>';
+      alert(data.message || '检测失败');
+    }
+  } catch(e) {
+    statusCell.innerHTML = '<span class="tag tag-danger">网络错误</span>';
+  }
+  btn.disabled = false;
+  btn.textContent = '检测';
+}
+
+// === 批量检测 ===
+async function checkAllCookies() {
+  if (!confirm('将逐个检测所有账号的 Cookie 有效性，可能需要几秒到几十秒，确定继续？')) return;
+
+  var buttons = document.querySelectorAll('button[id^="btn-"]');
+  buttons.forEach(function(b) { b.disabled = true; b.textContent = '...'; });
+
+  try {
+    var res = await fetch('/admin/api/accounts/check-all-cookies', { method: 'POST' });
+    var data = await res.json();
+    if (data.success && data.results) {
+      data.results.forEach(function(r) {
+        var cell = document.getElementById('status-' + r.id);
+        if (cell) {
+          var html = r.valid
+            ? '<span class="tag tag-success">有效</span>' + (r.username ? ' <small>' + r.username + '</small>' : '') + (r.vipType ? ' <small>' + r.vipType.toUpperCase() + '</small>' : '')
+            : '<span class="tag tag-danger">过期</span>' + (r.raw ? ' <br><small>' + r.raw + '</small>' : '');
+          if (r.reassignedLinks > 0) {
+            html += ' <small style="color:#FAAD14;">(' + r.reassignedLinks + ' 链接已切换)</small>';
+          }
+          cell.innerHTML = html;
+        }
+      });
+      var validCount = data.results.filter(function(r) { return r.valid; }).length;
+      var msg = '检测完成：' + validCount + ' 个有效，' + (data.results.length - validCount) + ' 个过期';
+      if (data.poolLinksReassigned > 0) {
+        msg += '\n\n' + data.poolLinksReassigned + ' 个过期账号的池链接已自动切换。';
+      }
+      alert(msg);
+    }
+  } catch(e) {
+    alert('批量检测失败: ' + (e.message || e));
+  }
+  buttons.forEach(function(b) { b.disabled = false; b.textContent = '检测'; });
+}
+
+// === 批量抓取账号信息 ===
+async function fetchAllVip() {
+  if (!confirm('将逐个抓取所有账号的会员信息，可能需要几秒到几十秒，确定继续？')) return;
+
+  var btn = document.getElementById('fetchVipBtn');
+  btn.disabled = true;
+  btn.textContent = '抓取中...';
+
+  try {
+    var res = await fetch('/admin/api/accounts/fetch-all-vip', { method: 'POST' });
+    var data = await res.json();
+    if (data.success && data.results) {
+      // 更新表格中的会员类型和到期时间
+      data.results.forEach(function(r) {
+        if (!r.ok) return;
+        // 找到对应行并更新显示
+        var rows = document.querySelectorAll('table tbody tr');
+        rows.forEach(function(row) {
+          var link = row.querySelector('a[href="/admin/accounts/' + r.id + '"]');
+          if (!link) return;
+          // 更新会员类型（第5列）
+          var cells = row.querySelectorAll('td');
+          if (cells.length >= 5) {
+            if (r.vipType === 'svip') cells[4].innerHTML = '<span class="tag tag-warning">SVIP</span>';
+            else if (r.vipType === 'vip') cells[4].innerHTML = '<span class="tag tag-default">VIP</span>';
+            else if (r.vipType === 'normal') cells[4].innerHTML = '<span class="tag tag-default">普通</span>';
+          }
+          // 更新到期时间（第6列）
+          if (cells.length >= 6 && r.expireDate) {
+            cells[5].textContent = r.expireDate;
+          }
+          // 更新昵称（第2列）
+          if (cells.length >= 2 && r.nickname) {
+            var strong = cells[1].querySelector('strong');
+            if (strong) strong.textContent = r.nickname;
+          }
+        });
+      });
+      alert('抓取完成：已更新 ' + data.updatedCount + ' / ' + data.total + ' 个账号');
+    } else {
+      alert('抓取失败: ' + (data.message || '未知错误'));
+    }
+  } catch(e) {
+    alert('抓取出错: ' + (e.message || e));
+  }
+  btn.disabled = false;
+  btn.textContent = '批量抓取账号信息';
+}
+
+// === 暂停/恢复 ===
+async function togglePause(id) {
+  var res = await fetch('/admin/api/accounts/' + id + '/toggle-pause', { method: 'POST' });
+  var data = await res.json();
+  if (data.success) {
+    location.reload();
+  } else {
+    alert(data.message);
+  }
+}
+
+// === 单账号删除 ===
+async function deleteAccount(id, nickname) {
+  // 先查询依赖链接
+  var depRes = await fetch('/admin/api/accounts/' + id + '/dependent-links');
+  var dep = await depRes.json();
+
+  var msg = '确定要删除账号「' + nickname + '」吗？';
+  if (dep.poolCount > 0) {
+    msg += '\n\n⚠ 该账号关联了 ' + dep.poolCount + ' 个分享池链接，删除后将自动切换到其他账号。';
+  }
+  if (dep.soloCount > 0) {
+    msg += '\n\n⚠ 该账号关联了 ' + dep.soloCount + ' 个独享链接，删除后这些链接将失效。';
+  }
+  msg += '\n\n删除后可在数据库中恢复。';
+
+  if (!confirm(msg)) return;
+
+  var res = await fetch('/admin/api/accounts/' + id + '/delete', { method: 'POST' });
+  var data = await res.json();
+  if (data.success) {
+    alert(data.message);
+    location.reload();
+  } else {
+    alert(data.message);
+  }
+}
+</script>

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= typeof title !== 'undefined' ? title : '管理后台' %></title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/admin/dashboard" class="brand">网盘会员管理</a>
+    <div class="nav-links">
+      <a href="/admin/dashboard">首页</a>
+      <a href="/admin/accounts">账号池</a>
+      <a href="/admin/links">分享池</a>
+      <a href="/admin/settings">设置</a>
+      <div class="nav-user" id="navUser" onclick="toggleUserMenu(event)">
+        <%= typeof adminUsername !== 'undefined' ? adminUsername : '' %> &#9660;
+        <div class="nav-user-dropdown" id="userDropdown">
+          <button onclick="openPwdModal()">修改密码</button>
+          <div class="divider"></div>
+          <a href="/admin/logout">登出</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <%- body %>
+  </div>
+
+  <!-- 修改密码弹窗 -->
+  <div class="modal-mask" id="pwdModal">
+    <div class="modal-box">
+      <h3>修改密码</h3>
+      <form id="pwdForm" onsubmit="changePwd(event)">
+        <div class="form-group">
+          <label>原密码</label>
+          <input type="password" name="oldPassword" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label>新密码（至少 6 位）</label>
+          <input type="password" name="newPassword" class="form-control" required minlength="6">
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button type="submit" class="btn btn-primary">确认修改</button>
+          <button type="button" class="btn btn-secondary" onclick="closePwdModal()">取消</button>
+          <span id="pwdMsg" style="font-size:12px;"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <footer class="footer">
+    &copy; 2026 网盘会员账号共享平台
+  </footer>
+
+<script>
+function toggleUserMenu(e) {
+  e.stopPropagation();
+  document.getElementById('userDropdown').classList.toggle('show');
+}
+document.addEventListener('click', function() {
+  document.getElementById('userDropdown').classList.remove('show');
+});
+
+function openPwdModal() {
+  document.getElementById('userDropdown').classList.remove('show');
+  document.getElementById('pwdModal').classList.add('show');
+}
+function closePwdModal() {
+  document.getElementById('pwdModal').classList.remove('show');
+}
+
+async function changePwd(e) {
+  e.preventDefault();
+  var f = e.target;
+  var msg = document.getElementById('pwdMsg');
+  var res = await fetch('/admin/api/change-password', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ oldPassword: f.oldPassword.value, newPassword: f.newPassword.value })
+  });
+  var data = await res.json();
+  msg.textContent = data.message;
+  msg.style.color = data.success ? '#52C41A' : '#FF4D4F';
+  if (data.success) { f.reset(); setTimeout(closePwdModal, 1200); }
+}
+
+// ======== Custom Select 初始化 ========
+(function() {
+  function initCustomSelects() {
+    document.querySelectorAll('select').forEach(function(select) {
+      if (select.closest('.custom-select')) return;
+      var wrap = document.createElement('div');
+      wrap.className = 'custom-select';
+      if (select.disabled) wrap.classList.add('disabled');
+      if (select.style.display === 'none') return;
+      // 继承原始宽度
+      if (select.style.width) wrap.style.width = select.style.width;
+      else if (select.classList.contains('form-control')) wrap.style.width = '100%';
+
+      var trigger = document.createElement('div');
+      trigger.className = 'select-trigger';
+      trigger.innerHTML = '<span class="select-label"></span><svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
+
+      var dropdown = document.createElement('div');
+      dropdown.className = 'select-dropdown';
+
+      Array.from(select.options).forEach(function(opt) {
+        var optEl = document.createElement('div');
+        optEl.className = 'select-option';
+        if (opt.selected) optEl.classList.add('selected');
+        optEl.textContent = opt.text;
+        optEl.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          select.value = opt.value;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+          wrap.classList.remove('open');
+          // 更新显示
+          wrap.querySelector('.select-label').textContent = opt.text;
+          wrap.querySelectorAll('.select-option').forEach(function(o) {
+            o.classList.toggle('selected', o.textContent === opt.text);
+          });
+        });
+        dropdown.appendChild(optEl);
+      });
+
+      wrap.appendChild(trigger);
+      wrap.appendChild(dropdown);
+      select.parentNode.insertBefore(wrap, select);
+      wrap.appendChild(select);
+      select.style.display = 'none';
+
+      // 更新标签文字
+      var selectedOpt = select.options[select.selectedIndex];
+      trigger.querySelector('.select-label').textContent = selectedOpt ? selectedOpt.text : '';
+
+      // 点击触发器
+      trigger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (select.disabled) return;
+        var wasOpen = wrap.classList.contains('open');
+        document.querySelectorAll('.custom-select.open').forEach(function(s) { s.classList.remove('open'); });
+        if (!wasOpen) wrap.classList.add('open');
+      });
+
+      // 点击选项或外部关闭
+      select.addEventListener('change', function() {
+        var opt = select.options[select.selectedIndex];
+        trigger.querySelector('.select-label').textContent = opt ? opt.text : '';
+      });
+    });
+
+    document.addEventListener('click', function() {
+      document.querySelectorAll('.custom-select.open').forEach(function(s) { s.classList.remove('open'); });
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initCustomSelects);
+  } else {
+    initCustomSelects();
+  }
+})();
+</script>
+</body>
+</html>

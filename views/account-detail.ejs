@@ -1,0 +1,268 @@
+<div class="flex-between" style="margin-bottom: 20px;">
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <a href="/admin/accounts" class="btn btn-secondary btn-sm">&larr; 返回账号列表</a>
+    <h2 style="font-size: 20px; margin: 0;">账号详情 — <%= account.nickname %></h2>
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+
+  <!-- 左侧：基本信息 -->
+  <div class="card">
+    <div class="card-title">基本信息</div>
+    <form id="editForm">
+      <input type="hidden" name="id" value="<%= account.id %>">
+      <div class="form-group">
+        <label>昵称</label>
+        <input type="text" name="nickname" class="form-control" value="<%= account.nickname %>" required>
+      </div>
+      <div class="form-group">
+        <label>手机号</label>
+        <input type="text" name="phone" class="form-control" value="<%= account.phone || '' %>">
+      </div>
+      <div class="form-group">
+        <label>会员类型</label>
+        <select name="vip_type" class="form-control">
+          <option value="normal" <%= account.vip_type === 'normal' ? 'selected' : '' %>>普通账号</option>
+          <option value="vip" <%= account.vip_type === 'vip' ? 'selected' : '' %>>VIP（普通会员）</option>
+          <option value="svip" <%= account.vip_type === 'svip' ? 'selected' : '' %>>SVIP（超级会员）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>会员到期日期</label>
+        <input type="date" name="vip_expire_date" class="form-control" value="<%= account.vip_expire_date || '' %>">
+      </div>
+      <div class="form-group">
+        <label>备注</label>
+        <input type="text" name="notes" class="form-control" value="<%= account.notes || '' %>">
+      </div>
+      <button type="submit" class="btn btn-primary">保存修改</button>
+      <span id="editMsg" style="margin-left: 12px; font-size: 13px;"></span>
+    </form>
+  </div>
+
+  <!-- 右侧：Cookie + 操作 -->
+  <div>
+    <!-- Cookie 状态 -->
+    <div class="card">
+      <div class="card-title">账号信息</div>
+      <div style="margin-bottom: 12px;">
+        <span style="color: #666; font-size: 13px;">当前 Cookie：</span>
+        <code style="background:#F5F7FA; padding: 2px 8px; border-radius: 4px; font-size: 12px; word-break: break-all;"><%= cookiePreview %></code>
+        <% if (cookieFull) { %>
+        <button class="btn btn-sm btn-secondary" onclick="copyFullCookie()" style="margin-left: 6px; flex-shrink: 0;">复制</button>
+        <span id="cookieCopyMsg" style="margin-left: 4px; font-size: 11px;"></span>
+        <% } %>
+      </div>
+      <div style="margin-bottom: 12px;">
+        <span style="color: #666; font-size: 13px;">状态：</span>
+        <span id="cookieStatus">
+        <% if (account.cookie_status === 'valid') { %>
+          <span class="tag tag-success">有效</span>
+        <% } else if (account.cookie_status === 'expired') { %>
+          <span class="tag tag-danger">过期</span>
+        <% } else { %>
+          <span class="tag tag-default">未知</span>
+        <% } %>
+        </span>
+        <button class="btn btn-sm btn-secondary" onclick="checkCookie()" id="checkCookieBtn" style="margin-left: 8px;">检测Cookie</button>
+        <span id="checkMsg" style="margin-left: 8px; font-size: 12px;"></span>
+      </div>
+      <div style="margin-bottom: 12px;">
+        <span style="color: #666; font-size: 13px;">会员：</span>
+        <span id="vipInfo">
+        <% if (account.vip_type === 'svip' || account.vip_type === 'vip') { %>
+          <span class="tag tag-warning"><%= account.vip_type.toUpperCase() %></span>
+        <% } else { %>
+          <%= account.vip_type || '--' %>
+        <% } %>
+        </span>
+        <% if (account.vip_expire_date) { %>
+          <span style="margin-left: 8px; font-size: 12px; color: #999;">到期 <%= account.vip_expire_date %></span>
+        <% } %>
+        <button class="btn btn-sm btn-secondary" onclick="fetchVip()" id="fetchVipBtn" style="margin-left: 8px;">抓取账号信息</button>
+      </div>
+      <div style="margin-bottom: 12px;">
+        <span style="color: #666; font-size: 13px;">最后更新：</span>
+        <span><%= account.cookie_updated_at || '--' %></span>
+      </div>
+
+      <form id="cookieForm" style="border-top: 1px solid #E8E8E8; padding-top: 12px;">
+        <div class="form-group">
+          <label>更新 Cookie</label>
+          <textarea name="cookie_text" class="form-control" rows="4" placeholder="粘贴新的 Cookie 字符串..." style="resize: vertical;"></textarea>
+        </div>
+        <button type="submit" class="btn btn-secondary btn-sm">更新 Cookie</button>
+        <span id="cookieMsg" style="margin-left: 12px; font-size: 13px;"></span>
+      </form>
+    </div>
+
+    <!-- 使用记录 -->
+    <div class="card">
+      <div class="card-title">最近使用记录</div>
+      <% if (logs.length === 0) { %>
+        <p style="color: #999; font-size: 13px;">暂无使用记录</p>
+      <% } else { %>
+        <table>
+          <thead>
+            <tr><th>时间</th><th>操作</th><th>IP</th></tr>
+          </thead>
+          <tbody>
+            <% logs.forEach(function(log) { %>
+            <tr>
+              <td><%= log.created_at ? log.created_at.slice(0, 16) : '--' %></td>
+              <td><%= log.action %></td>
+              <td><%= log.ip_address || '--' %></td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+
+    <!-- 删除 -->
+    <div class="card" style="border: 1px solid #FFE6E6;">
+      <div class="card-title" style="color: #FF4D4F;">危险操作</div>
+      <p style="color: #999; font-size: 13px; margin-bottom: 12px;">删除后该账号将不再出现在列表中，关联的分享链接也会失效。</p>
+      <button class="btn btn-danger" onclick="deleteAccount(<%= account.id %>)">删除此账号</button>
+    </div>
+  </div>
+
+</div>
+
+
+<script>
+var fullCookie = <%- JSON.stringify(cookieFull || '') %>;
+
+function copyFullCookie() {
+  if (!fullCookie) return;
+  navigator.clipboard.writeText(fullCookie).then(function() {
+    var el = document.getElementById('cookieCopyMsg');
+    el.textContent = '已复制';
+    el.style.color = '#52C41A';
+    setTimeout(function() { el.textContent = ''; }, 1500);
+  }).catch(function() {
+    prompt('手动复制 Cookie:', fullCookie);
+  });
+}
+
+document.getElementById('editForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const form = e.target;
+  const msg = document.getElementById('editMsg');
+  const body = {
+    nickname: form.nickname.value,
+    phone: form.phone.value,
+    vip_type: form.vip_type.value,
+    vip_expire_date: form.vip_expire_date.value,
+    notes: form.notes.value,
+  };
+  const res = await fetch('/admin/api/accounts/<%= account.id %>', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  msg.textContent = data.message;
+  msg.style.color = data.success ? '#52C41A' : '#FF4D4F';
+});
+
+document.getElementById('cookieForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const msg = document.getElementById('cookieMsg');
+  const cookieText = this.cookie_text.value;
+  if (!cookieText) { msg.textContent = '请输入 Cookie'; msg.style.color = '#FF4D4F'; return; }
+
+  const res = await fetch('/admin/api/accounts/<%= account.id %>/cookie', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cookie_text: cookieText })
+  });
+  const data = await res.json();
+  msg.textContent = data.message;
+  msg.style.color = data.success ? '#52C41A' : '#FF4D4F';
+  if (data.success) {
+    this.reset();
+    setTimeout(function() { location.reload(); }, 800);
+  }
+});
+
+async function checkCookie() {
+  const msg = document.getElementById('checkMsg');
+  const btn = document.getElementById('checkCookieBtn');
+  btn.disabled = true; btn.textContent = '检测中...';
+  msg.textContent = '';
+  try {
+    const res = await fetch('/admin/api/accounts/<%= account.id %>/check-cookie', { method: 'POST' });
+    const data = await res.json();
+    if (data.success && data.result) {
+      const r = data.result;
+      if (r.valid) {
+        msg.textContent = r.username ? (r.username + ' · ' + (r.vipType ? r.vipType.toUpperCase() : '')) : '有效';
+        msg.style.color = '#52C41A';
+        document.getElementById('cookieStatus').innerHTML = '<span class="tag tag-success">有效</span>';
+      } else {
+        msg.textContent = r.raw || '已过期';
+        msg.style.color = '#FF4D4F';
+        document.getElementById('cookieStatus').innerHTML = '<span class="tag tag-danger">过期</span>';
+      }
+    } else {
+      msg.textContent = data.message || '检测失败';
+      msg.style.color = '#FF4D4F';
+    }
+  } catch(e) {
+    msg.textContent = '网络错误';
+    msg.style.color = '#FF4D4F';
+  }
+  btn.disabled = false; btn.textContent = '检测Cookie';
+}
+
+async function fetchVip() {
+  const msg = document.getElementById('checkMsg');
+  const btn = document.getElementById('fetchVipBtn');
+  btn.disabled = true; btn.textContent = '抓取中...';
+  try {
+    const res = await fetch('/admin/api/accounts/<%= account.id %>/check-cookie', { method: 'POST' });
+    const data = await res.json();
+    if (data.success && data.result) {
+      const r = data.result;
+      if (r.vipType) {
+        msg.textContent = r.vipType.toUpperCase() + (r.expireDate ? ' 到期 ' + r.expireDate : '');
+        msg.style.color = '#52C41A';
+        document.querySelector('select[name="vip_type"]').value = r.vipType;
+        document.getElementById('vipInfo').innerHTML = '<span class="tag tag-warning">' + r.vipType.toUpperCase() + '</span>';
+      } else {
+        // 明确非会员，清除旧状态
+        msg.textContent = r.expireDate ? '会员已过期 (' + r.expireDate + ')' : '普通用户';
+        msg.style.color = '#999';
+        document.querySelector('select[name="vip_type"]').value = 'normal';
+        document.getElementById('vipInfo').innerHTML = '<span style="color:#999;">普通用户</span>';
+      }
+      if (r.expireDate) {
+        document.querySelector('input[name="vip_expire_date"]').value = r.expireDate;
+      }
+      if (r.username) {
+        document.querySelector('input[name="nickname"]').value = r.username;
+      }
+    } else {
+      msg.textContent = data.message || '抓取失败';
+      msg.style.color = '#FF4D4F';
+    }
+  } catch(e) {
+    msg.textContent = '网络错误';
+    msg.style.color = '#FF4D4F';
+  }
+  btn.disabled = false; btn.textContent = '抓取账号信息';
+}
+
+async function deleteAccount(id) {
+  if (!confirm('确定要永久删除此账号吗？此操作不可恢复。')) return;
+  const res = await fetch('/admin/api/accounts/' + id + '/delete', { method: 'POST' });
+  const data = await res.json();
+  if (data.success) {
+    location.href = '/admin/accounts';
+  } else {
+    alert(data.message);
+  }
+}
+</script>

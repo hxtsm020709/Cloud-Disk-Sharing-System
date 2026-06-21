@@ -1,0 +1,30 @@
+{
+  "name": "baidu-vip-share",
+  "version": "1.0.0",
+  "description": "网盘共享系统",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "nodemon server/index.js",
+    "start": "node server/index.js",
+    "db:init": "node -e \"require('./server/database').init()\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.17.0",
+    "bcrypt": "^6.0.0",
+    "dotenv": "^17.4.2",
+    "ejs": "^6.0.1",
+    "express": "^5.2.1",
+    "express-ejs-layouts": "^2.5.1",
+    "express-session": "^1.19.0",
+    "node-cron": "^4.2.1",
+    "sql.js": "^1.14.1"
+  },
+  "devDependencies": {
+    "jimp": "^1.6.1",
+    "nodemon": "^3.1.14",
+    "qrcode-reader": "^1.0.4"
+  }
+}

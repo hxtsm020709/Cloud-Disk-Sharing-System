@@ -1,0 +1,346 @@
+<!-- 生成链接 -->
+<div class="card">
+  <div class="card-title">生成独享链接</div>
+  <form id="genLinkForm" style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+    <div class="form-group" style="margin-bottom: 0; min-width: 200px;">
+      <label>选择账号</label>
+      <select name="account_id" class="form-control" required>
+        <option value="">-- 请选择 --</option>
+        <% accounts.forEach(function(acc) { %>
+          <option value="<%= acc.id %>"><%= acc.nickname %></option>
+        <% }); %>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom: 0; min-width: 140px;">
+      <label>有效期</label>
+      <select name="expire_hours" class="form-control">
+        <% expireOptions.forEach(function(opt) { %>
+          <option value="<%= opt.hours %>"><%= opt.label %></option>
+        <% }); %>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary" style="height: 42px;">生成链接</button>
+    <span id="genMsg" style="font-size: 13px;"></span>
+  </form>
+  <% if (accounts.length === 0) { %>
+    <div class="alert alert-warning" style="margin-top: 12px;">
+      请先 <a href="/admin/accounts/add">添加账号</a>，才能生成独享链接。
+    </div>
+  <% } %>
+</div>
+
+<!-- 生成分享池链接 -->
+<div class="card" style="margin-top:20px;">
+  <div class="card-title">生成分享池链接</div>
+  <p style="color:#999; font-size:13px; margin-bottom:12px;">每次生成 1 条链接，自动选负载最低的账号；支持批量。</p>
+  <form id="poolForm" onsubmit="genPoolLink(event)" style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap;">
+    <div class="form-group" style="margin:0;">
+      <label>有效期</label>
+      <select name="expire_hours" class="form-control" style="width:120px;">
+        <option value="3">3 小时</option>
+        <option value="6">6 小时</option>
+        <option value="24" selected>24 小时</option>
+        <option value="72">3 天</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label>数量</label>
+      <input type="number" name="count" class="form-control" value="1" min="1" max="50" style="width:80px;">
+    </div>
+    <button type="submit" class="btn btn-primary">生成链接</button>
+    <span id="poolMsg" style="font-size:12px;"></span>
+  </form>
+  <div id="poolResults" style="display:none;margin-top:12px;">
+    <div class="alert alert-info" id="poolSummary"></div>
+    <div style="max-height:300px;overflow-y:auto;">
+      <table>
+        <thead><tr><th>账号</th><th>负载</th><th>链接</th><th>复制</th></tr></thead>
+        <tbody id="poolTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 生成的链接展示 -->
+<div id="resultCard" class="card" style="display: none;">
+  <div class="card-title">链接已生成</div>
+  <div style="display: flex; gap: 8px; align-items: center;">
+    <code id="linkUrl" style="flex:1; background:#F5F7FA; padding: 10px 14px; border-radius: 6px; font-size: 14px; word-break: break-all;"></code>
+    <button class="btn btn-sm btn-primary" onclick="copyLink()">复制</button>
+  </div>
+  <p style="color: #999; font-size: 13px; margin-top: 8px;">
+    到期时间：<span id="linkExpire"></span>
+    &nbsp;|&nbsp;
+    将链接发送给员工，在手机浏览器中打开即可使用。
+  </p>
+</div>
+
+<!-- 链接列表 -->
+<div class="card">
+  <div class="flex-between" style="margin-bottom: 8px;">
+    <div class="card-title" style="margin: 0;">分享链接管理 <span style="font-size: 13px; color: #999; font-weight: normal;">(共 <%= links.length %> 条)</span></div>
+  </div>
+
+  <!-- 筛选栏 -->
+  <form method="GET" action="/admin/links" style="display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;">
+    <input type="text" name="search" class="form-control" placeholder="搜索账号或 Token..." value="<%= typeof search !== 'undefined' ? search : '' %>" style="max-width: 220px;">
+    <select name="status" class="form-control" style="max-width: 130px;">
+      <option value="all" <%= (typeof status === 'undefined' || status === 'all') ? 'selected' : '' %>>全部状态</option>
+      <option value="active" <%= status === 'active' ? 'selected' : '' %>>有效</option>
+      <option value="expired" <%= status === 'expired' ? 'selected' : '' %>>已过期</option>
+      <option value="disabled" <%= status === 'disabled' ? 'selected' : '' %>>已停用</option>
+    </select>
+    <select name="pool" class="form-control" style="max-width: 120px;">
+      <option value="" <%= (typeof poolType === 'undefined' || poolType === '') ? 'selected' : '' %>>全部类型</option>
+      <option value="solo" <%= poolType === 'solo' ? 'selected' : '' %>>独享</option>
+      <option value="pool" <%= poolType === 'pool' ? 'selected' : '' %>>分享池</option>
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm">筛选</button>
+    <% if (search || status || poolType) { %>
+      <a href="/admin/links" class="btn btn-secondary btn-sm">清除</a>
+    <% } %>
+  </form>
+
+  <% if (links.length > 0) { %>
+  <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
+    <input type="checkbox" id="selectAllCheckbox" onclick="toggleSelectAll(this)" title="全选/取消全选">
+    <button class="btn btn-sm btn-secondary" onclick="selectAll()">全选</button>
+    <button class="btn btn-sm btn-secondary" onclick="clearSelection()">取消全选</button>
+    <span style="flex:1;"></span>
+    <span id="selectedCount" style="font-size: 13px; color: #999;"></span>
+    <button class="btn btn-sm btn-danger" onclick="batchDisable()">批量停用</button>
+    <button class="btn btn-sm btn-danger" onclick="batchDelete()">批量删除</button>
+    <button class="btn btn-sm btn-danger" onclick="deleteAllDisabled()">删除所有已停用/过期</button>
+  </div>
+  <% } %>
+  <% if (links.length === 0) { %>
+    <div class="empty-state">
+      <p style="color: #999;">还没有生成过分享链接，在上方选择一个账号和有效期后点击「生成链接」</p>
+    </div>
+  <% } else { %>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <% links.forEach(function(link) { %>
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #F9FAFB; border-radius: 8px; border: 1px solid #E8E8E8; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
+          <input type="checkbox" class="link-check" value="<%= link.id %>" onchange="updateSelection()" style="flex-shrink: 0;">
+          <strong style="white-space: nowrap;"><%= link.account_nickname || '已删除' %></strong>
+          <span style="color: #999; font-size: 13px;"><%= link.expire_hours %>h</span>
+          <span style="color: #999; font-size: 13px;" title="<%= link.expire_at %>"><%= link.first_used_at ? (link.expire_at ? link.expire_at.slice(0, 16) : '--') : '待使用' %></span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+          <span style="color: #999; font-size: 12px;">使用 <%= link.use_count %> 次</span>
+          <% if (link.is_pool === 1) { %>
+            <span class="tag tag-warning" style="font-size:10px;">分享池</span>
+          <% } else { %>
+            <span class="tag tag-default" style="font-size:10px;">独享</span>
+          <% } %>
+          <% if (link.status === 'active') { %>
+            <span class="tag tag-success">有效</span>
+            <code style="font-size: 12px; background: #E8F1FB; padding: 2px 8px; border-radius: 4px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="/s/<%= link.token %>">/s/<%= link.token.slice(0,12) %>...</code>
+            <button class="btn btn-sm btn-secondary" onclick="copyToken('<%= link.token %>')">复制</button>
+            <% if (link.is_pool === 1) { %><button class="btn btn-sm btn-secondary" onclick="rotateAccount(<%= link.id %>, this)">切换</button><% } %>
+            <button class="btn btn-sm btn-danger" onclick="disableLink(<%= link.id %>)">停用</button>
+          <% } else if (link.status === 'expired') { %>
+            <span class="tag tag-default">已过期</span>
+          <% } else { %>
+            <span class="tag tag-danger">已停用</span>
+          <% } %>
+        </div>
+      </div>
+      <% }); %>
+    </div>
+  <% } %>
+</div>
+
+<script>
+document.getElementById('genLinkForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const msg = document.getElementById('genMsg');
+  msg.textContent = '生成中...';
+  msg.style.color = '#999';
+
+  const res = await fetch('/admin/api/links', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      account_id: this.account_id.value,
+      expire_hours: this.expire_hours.value,
+    })
+  });
+  const data = await res.json();
+  msg.textContent = data.message;
+  msg.style.color = data.success ? '#52C41A' : '#FF4D4F';
+
+  if (data.success) {
+    const url = window.location.origin + '/s/' + data.token;
+    document.getElementById('linkUrl').textContent = url;
+    document.getElementById('linkExpire').textContent = data.expireAt.slice(0, 16);
+    document.getElementById('resultCard').style.display = '';
+    setTimeout(function() { location.reload(); }, 3000);
+  }
+});
+
+function copyLink() {
+  const url = document.getElementById('linkUrl').textContent;
+  copyToClipboard(url);
+}
+
+function copyToken(token) {
+  const url = window.location.origin + '/s/' + token;
+  copyToClipboard(url);
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(function() {
+    alert('链接已复制: ' + text);
+  }).catch(function() {
+    prompt('请手动复制链接:', text);
+  });
+}
+
+async function disableLink(id) {
+  if (!confirm('确定要停用此链接吗？')) return;
+  const res = await fetch('/admin/api/links/' + id + '/disable', { method: 'POST' });
+  const data = await res.json();
+  if (data.success) location.reload();
+}
+
+async function rotateAccount(linkId, btn) {
+  if (!confirm('确定要为此链接切换账号吗？系统将自动分配负载最低的有效账号。')) return;
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    var res = await fetch('/admin/api/links/' + linkId + '/rotate-account', { method: 'POST' });
+    var data = await res.json();
+    if (data.success) {
+      alert(data.rotated ? '已切换到: ' + data.newAccountName : data.message);
+      location.reload();
+    } else {
+      alert(data.message);
+    }
+  } catch(e) { alert('切换失败'); }
+  btn.disabled = false;
+  btn.textContent = '切换';
+}
+
+// === 选择功能 ===
+function updateSelection() {
+  var allCbs = document.querySelectorAll('.link-check');
+  var checked = document.querySelectorAll('.link-check:checked');
+  var count = checked.length;
+  document.getElementById('selectedCount').textContent = count > 0 ? '已选择 ' + count + ' 条链接' : '';
+  var selectAll = document.getElementById('selectAllCheckbox');
+  selectAll.checked = allCbs.length > 0 && checked.length === allCbs.length;
+  selectAll.indeterminate = checked.length > 0 && checked.length < allCbs.length;
+}
+
+function toggleSelectAll(el) {
+  document.querySelectorAll('.link-check').forEach(function(cb) { cb.checked = el.checked; });
+  updateSelection();
+}
+
+function selectAll() {
+  document.querySelectorAll('.link-check').forEach(function(cb) { cb.checked = true; });
+  updateSelection();
+}
+
+function clearSelection() {
+  document.querySelectorAll('.link-check').forEach(function(cb) { cb.checked = false; });
+  updateSelection();
+}
+
+async function batchDisable() {
+  var checked = document.querySelectorAll('.link-check:checked');
+  if (checked.length === 0) {
+    alert('请先勾选要停用的链接');
+    return;
+  }
+  if (!confirm('确定要停用选中的 ' + checked.length + ' 条链接吗？')) return;
+
+  var ids = [];
+  checked.forEach(function(cb) { ids.push(parseInt(cb.value)); });
+
+  var res = await fetch('/admin/api/links/batch-disable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: ids })
+  });
+  var data = await res.json();
+  alert(data.message);
+  if (data.success) location.reload();
+}
+
+async function deleteAllDisabled() {
+  if (!confirm('确定要删除所有已停用和已过期的链接吗？此操作不可恢复。')) return;
+  var res = await fetch('/admin/api/links/delete-all-disabled', { method: 'POST' });
+  var data = await res.json();
+  alert(data.message);
+  if (data.success) location.reload();
+}
+
+async function batchDelete() {
+  var checked = document.querySelectorAll('.link-check:checked');
+  if (checked.length === 0) {
+    alert('请先勾选要删除的链接');
+    return;
+  }
+  if (!confirm('确定要删除选中的 ' + checked.length + ' 条链接吗？此操作不可恢复。')) return;
+
+  var ids = [];
+  checked.forEach(function(cb) { ids.push(parseInt(cb.value)); });
+
+  var res = await fetch('/admin/api/links/batch-delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: ids })
+  });
+  var data = await res.json();
+  if (data.success) {
+    location.reload();
+  } else {
+    alert(data.message);
+  }
+}
+
+// ======== 生成分享池链接 ========
+async function genPoolLink(e) {
+  e.preventDefault();
+  var f = e.target;
+  var count = parseInt(f.count.value) || 1;
+  var hours = parseInt(f.expire_hours.value);
+  var msg = document.getElementById('poolMsg');
+  msg.textContent = '生成中...'; msg.style.color = '#999';
+
+  var url = count === 1 ? '/admin/api/links/pool' : '/admin/api/links/batch-pool';
+  var body = count === 1 ? { expire_hours: hours } : { expire_hours: hours, count: count };
+
+  try {
+    var res = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+    var data = await res.json();
+    if (data.success) {
+      var tokens = data.tokens || [data.token];
+      document.getElementById('poolSummary').textContent = '已生成 ' + tokens.length + ' 个分享池链接（' + hours + 'h 有效），到期：' + data.expireAt;
+      msg.textContent = data.message;
+      msg.style.color = '#52C41A';
+      var tbody = document.getElementById('poolTableBody');
+      tbody.innerHTML = '';
+      tokens.forEach(function(t) {
+        var linkUrl = location.origin + '/s/' + t.token;
+        tbody.innerHTML += '<tr><td>' + t.accountName + (t.vipType ? ' <span class=\"tag tag-warning\">' + t.vipType.toUpperCase() + '</span>' : '') + '</td><td style=\"font-size:11px;color:#999;\">已用 ' + (t.score || 0) + ' 次</td><td><code style=\"font-size:11px;\">' + linkUrl.slice(0,50) + '...</code></td><td><button class=\"btn btn-sm btn-secondary\" onclick=\"copyPoolUrl(\'' + linkUrl + '\')\">复制</button></td></tr>';
+      });
+      document.getElementById('poolResults').style.display = '';
+    } else {
+      msg.textContent = data.message; msg.style.color = '#FF4D4F';
+    }
+  } catch(e) { msg.textContent = '请求失败'; msg.style.color = '#FF4D4F'; }
+}
+
+function copyPoolUrl(url) { navigator.clipboard.writeText(url).then(function(){ alert('已复制: ' + url); }).catch(function(){ prompt('手动复制:', url); }); }
+
+// 监听单个复选框变化
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.link-check').forEach(function(cb) {
+    cb.addEventListener('change', updateSelection);
+  });
+});
+</script>

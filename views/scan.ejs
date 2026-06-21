@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+  <title>网盘共享扫码</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #F5F7FA;
+      color: #333;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: 0 16px 30px;
+    }
+
+    /* Header */
+    .page-header {
+      text-align: center;
+      padding: 24px 0 18px;
+    }
+    .page-header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #333;
+      margin: 0;
+    }
+    .page-header .sub {
+      font-size: 12px;
+      color: #999;
+      margin-top: 4px;
+    }
+
+    /* Card */
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #333;
+    }
+
+    /* Info Rows */
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 0;
+      font-size: 14px;
+      border-bottom: 1px solid #F5F5F5;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-row .label { color: #8C8C8C; font-size: 13px; }
+    .info-row .value { color: #333; font-weight: 500; text-align: right; }
+    .status-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .dot-green { background: #52C41A; }
+    .dot-yellow { background: #FAAD14; }
+    .dot-red { background: #FF4D4F; }
+    .main-btn:disabled {
+      background: #D9D9D9;
+      box-shadow: none;
+      cursor: not-allowed;
+      transform: none;
+      opacity: 0.7;
+    }
+
+    /* Main Button */
+    .main-btn-wrap { margin: 20px 0 10px; }
+    .main-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #4A90D9, #357ABD);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 17px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(74,144,217,0.3);
+      transition: all 0.15s;
+    }
+    .main-btn:active { transform: scale(0.97); opacity: 0.9; }
+
+    /* Upload */
+    .upload-zone {
+      padding: 20px 14px;
+      background: #FAFAFA;
+      border: 2px dashed #D9D9D9;
+      border-radius: 10px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .upload-zone:hover,
+    .upload-zone.drag-over {
+      border-color: #4A90D9;
+      background: #E8F1FB;
+    }
+    .upload-zone .upload-icon { font-size: 28px; margin-bottom: 6px; }
+    .upload-zone .upload-text { font-size: 14px; color: #8C8C8C; }
+    .upload-zone .upload-hint { font-size: 11px; color: #BFBFBF; margin-top: 4px; }
+    .upload-status { margin-top: 8px; font-size: 12px; color: #999; text-align: center; min-height: 18px; }
+
+    /* System Tips */
+    .tip-item {
+      padding: 10px 0;
+      font-size: 13px;
+      line-height: 1.7;
+      color: #666;
+      border-bottom: 1px solid #F5F5F5;
+    }
+    .tip-item:last-child { border-bottom: none; }
+    .tip-item .highlight { color: #FF4D4F; }
+    .tag-row { display: flex; gap: 8px; margin-top: 6px; }
+    .mini-tag {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #F0F0F0;
+      color: #999;
+    }
+
+    /* Tutorial */
+    .tutorial-divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      color: #999;
+      font-size: 13px;
+    }
+    .tutorial-divider::before,
+    .tutorial-divider::after {
+      content: ''; flex: 1; height: 1px; background: #E8E8E8;
+    }
+    .tutorial-btns { display: flex; gap: 10px; }
+    .tutorial-btn {
+      flex: 1;
+      padding: 12px 0;
+      background: #FAFAFA;
+      border: 1px solid #E8E8E8;
+      border-radius: 8px;
+      color: #333;
+      font-size: 13px;
+      text-align: center;
+      cursor: pointer;
+      text-decoration: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      transition: border-color 0.2s;
+    }
+    .tutorial-btn:hover { border-color: #4A90D9; }
+    .tutorial-btn .icon { font-size: 20px; }
+
+    /* ========================================
+       Scanner — 专业扫码取景框设计
+       ======================================== */
+    .scanner-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: #0a0a0a;
+      flex-direction: column;
+      align-items: center;
+    }
+    .scanner-overlay.show { display: flex; }
+
+    /* 顶部栏 */
+    .scanner-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 12px 16px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .scanner-topbar .title {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: .5px;
+    }
+    .scanner-topbar .close-btn {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.12);
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .scanner-topbar .close-btn:active { background: rgba(255,255,255,0.25); }
+
+    /* 取景区域 */
+    .scanner-viewport {
+      position: relative;
+      width: 280px;
+      height: 280px;
+      flex-shrink: 0;
+      margin-top: 8vh;
+      overflow: hidden;
+    }
+
+    /* 视频层 — 填满取景框 */
+    .scanner-viewport video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+
+    /* 扫描线动画 */
+    .scan-line {
+      position: absolute;
+      left: 4px;
+      right: 4px;
+      height: 2px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(74,144,217,0.3) 15%,
+        #4A90D9 50%,
+        rgba(74,144,217,0.3) 85%,
+        transparent 100%
+      );
+      box-shadow: 0 0 8px rgba(74,144,217,0.6), 0 0 20px rgba(74,144,217,0.2);
+      border-radius: 1px;
+      animation: scanMove 2.2s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+      z-index: 5;
+      pointer-events: none;
+    }
+    @keyframes scanMove {
+      0%   { top: 8px; opacity: 0; }
+      10%  { opacity: 1; }
+      80%  { opacity: 1; }
+      100% { top: calc(100% - 10px); opacity: 0; }
+    }
+
+    /* 四角标记 */
+    .corner {
+      position: absolute;
+      width: 24px; height: 24px;
+      z-index: 6;
+      pointer-events: none;
+    }
+    .corner::before, .corner::after {
+      content: '';
+      position: absolute;
+      background: #4A90D9;
+      border-radius: 2px;
+    }
+    .corner-tl { top: -1px; left: -1px; }
+    .corner-tr { top: -1px; right: -1px; }
+    .corner-bl { bottom: -1px; left: -1px; }
+    .corner-br { bottom: -1px; right: -1px; }
+
+    /* 水平边 */
+    .corner-tl::before, .corner-tr::before,
+    .corner-bl::before, .corner-br::before {
+      width: 24px; height: 3px;
+      top: 0; left: 0;
+    }
+    .corner-bl::before, .corner-br::before { top: auto; bottom: 0; }
+
+    /* 垂直边 */
+    .corner-tl::after, .corner-tr::after,
+    .corner-bl::after, .corner-br::after {
+      width: 3px; height: 24px;
+      top: 0; left: 0;
+    }
+    .corner-tr::after, .corner-br::after { left: auto; right: 0; }
+
+    /* 半透明遮罩 */
+    .scanner-mask {
+      position: absolute;
+      background: rgba(10,10,10,0.55);
+      pointer-events: none;
+      z-index: 3;
+    }
+    .mask-top    { inset: 0 0 auto 0; height: 0; }
+    .mask-bottom { inset: auto 0 0 0; height: 0; }
+    .mask-left    { inset: 0 auto 0 0; width: 0; }
+    .mask-right   { inset: 0 0 0 auto; width: 0; }
+    /* mask尺寸由JS动态设置 */
+
+    /* 底部提示区 */
+    .scanner-hint {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 0 24px;
+      text-align: center;
+      min-height: 120px;
+    }
+    .scanner-hint .hint-text {
+      color: #c0c0c8;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+    .scanner-hint .hint-icon {
+      font-size: 28px;
+      margin-bottom: 10px;
+      opacity: 0.6;
+    }
+
+    /* 确认按钮区 */
+    .scanner-actions {
+      padding: 0 24px 24px;
+      width: 100%;
+    }
+    .scanner-actions .confirm-btn {
+      width: 100%;
+      padding: 14px;
+      background: #4A90D9;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .scanner-actions .confirm-btn:active { transform: scale(0.97); }
+    .scanner-actions .retry-btn {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      padding: 10px;
+      background: transparent;
+      color: #999;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* 状态提示（在取景框下方） */
+    .scanner-status {
+      flex-shrink: 0;
+      padding: 12px 24px;
+      text-align: center;
+      font-size: 13px;
+      color: #a0a0b0;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 移动端适配 */
+    @media (max-width: 380px) {
+      .scanner-viewport {
+        width: 240px; height: 240px;
+        margin-top: 4vh;
+      }
+      .scanner-hint { min-height: 80px; }
+    }
+    @media (min-width: 420px) {
+      .scanner-viewport {
+        width: 300px; height: 300px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="page-header">
+  <h1>网盘共享扫码</h1>
+  <div class="sub">扫描 PC 端网盘登录二维码，自动登录</div>
+</div>
+
+<!-- 卡密信息 -->
+<div class="card">
+  <div class="card-title">卡密信息</div>
+  <div class="info-row">
+    <span class="label">有效期</span>
+    <span class="value"><%= expireAt %></span>
+  </div>
+  <div class="info-row">
+    <span class="label">账号名称</span>
+    <span class="value"><%= accountName %></span>
+  </div>
+  <div class="info-row">
+    <span class="label">已用次数</span>
+    <span class="value"><%= useCount %> / <%= maxUses %> 次</span>
+  </div>
+  <div class="info-row">
+    <span class="label">状态</span>
+    <span class="value"><span class="status-dot <%= statusClass %>"></span><%= statusText %></span>
+  </div>
+</div>
+
+<!-- 核心按钮 -->
+<div class="main-btn-wrap">
+  <% if (linkStatus === 'active') { %>
+  <button class="main-btn" onclick="openScanner()">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M4 4h6v6H4z"/><path d="M14 4h6v6h-6z"/><path d="M4 14h6v6H4z"/><circle cx="17" cy="17" r="3"/></svg>
+    PC端/平板 点我扫码登录
+  </button>
+  <% } else { %>
+  <button class="main-btn" disabled>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M4 4h6v6H4z"/><path d="M14 4h6v6h-6z"/><path d="M4 14h6v6H4z"/><circle cx="17" cy="17" r="3"/></svg>
+    <%= statusText === '已过期' ? '链接已过期' : (statusText === '已停用' ? '链接已被停用' : '链接不可用') %>
+  </button>
+  <% } %>
+</div>
+
+<!-- 截图上传 -->
+<div class="card">
+  <div class="card-title">截图识别</div>
+  <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+    <div class="upload-icon">&#128206;</div>
+    <div class="upload-text">点击上传或拖拽图片到此处</div>
+    <div class="upload-hint">支持 JPG / PNG / 截图</div>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="handleFile(this)">
+  <div class="upload-status" id="uploadStatus"></div>
+</div>
+
+<!-- 使用教程 -->
+<div class="card">
+  <div class="tutorial-divider"><span>使用教程</span></div>
+  <div class="tutorial-btns">
+    <%
+    var androidUrl = (typeof settings !== 'undefined' && settings.tutorial_android) || '';
+    var pcUrl = (typeof settings !== 'undefined' && settings.tutorial_pc) || '';
+    var appleUrl = (typeof settings !== 'undefined' && settings.tutorial_apple) || '';
+    %>
+    <% if (androidUrl) { %>
+      <a class="tutorial-btn" href="<%= androidUrl %>" target="_blank" rel="noopener"><span class="icon">&#128241;</span>安卓教程</a>
+    <% } else { %>
+      <a class="tutorial-btn" href="#" onclick="alert('安卓教程：\n1. 打开链接后点击下方扫码按钮\n2. 将摄像头对准PC端网盘登录二维码\n3. 点击确认登录即可');return false;"><span class="icon">&#128241;</span>安卓教程</a>
+    <% } %>
+    <% if (pcUrl) { %>
+      <a class="tutorial-btn" href="<%= pcUrl %>" target="_blank" rel="noopener"><span class="icon">&#128187;</span>电脑教程</a>
+    <% } else { %>
+      <a class="tutorial-btn" href="#" onclick="alert('电脑教程：\n1. 在PC打开网盘客户端\n2. 进入登录页面显示二维码\n3. 用手机打开此链接，点击扫码按钮扫描');return false;"><span class="icon">&#128187;</span>电脑教程</a>
+    <% } %>
+    <% if (appleUrl) { %>
+      <a class="tutorial-btn" href="<%= appleUrl %>" target="_blank" rel="noopener"><span class="icon">&#127822;</span>苹果教程</a>
+    <% } else { %>
+      <a class="tutorial-btn" href="#" onclick="alert('苹果教程：\n1. Safari打开链接后点击扫码按钮\n2. 允许摄像头权限\n3. 扫描PC端网盘二维码');return false;"><span class="icon">&#127822;</span>苹果教程</a>
+    <% } %>
+  </div>
+</div>
+
+<!-- 系统说明 -->
+<div class="card">
+  <div class="card-title">温馨提示</div>
+  <%
+  var tipsContent = (typeof settings !== 'undefined' && settings.tips_content) || '';
+  if (tipsContent) {
+    tipsContent.split('\n').forEach(function(line) {
+      var trimmed = line.trim();
+      if (trimmed) { %>
+        <div class="tip-item"><%= trimmed %></div>
+  <%  }
+    });
+  } else { %>
+    <div class="tip-item">如遇到电脑端扫码未跳转，需要退出应用重新进入再次扫码</div>
+    <div class="tip-item">如遇到<span class="highlight">账号掉线或Cookie失效</span>，可稍等10分钟后再试，后台自动登录中</div>
+  <% } %>
+</div>
+
+<!-- ========================================
+     Scanner Overlay — 专业扫码取景框
+     ======================================== -->
+<div class="scanner-overlay" id="scannerOverlay">
+
+  <!-- 顶部栏 -->
+  <div class="scanner-topbar">
+    <span class="title">扫描二维码</span>
+    <button class="close-btn" onclick="closeScanner()">&times;</button>
+  </div>
+
+  <!-- 取景框 -->
+  <div class="scanner-viewport" id="scanViewport">
+    <video id="scanVideo" autoplay playsinline></video>
+    <canvas id="scanCanvas" style="display:none;"></canvas>
+
+    <!-- 四角标记 -->
+    <div class="corner corner-tl"></div>
+    <div class="corner corner-tr"></div>
+    <div class="corner corner-bl"></div>
+    <div class="corner corner-br"></div>
+
+    <!-- 扫描线 -->
+    <div class="scan-line" id="scanLine"></div>
+
+    <!-- 半透明遮罩层（JS动态定位） -->
+    <div class="scanner-mask mask-top" id="maskTop"></div>
+    <div class="scanner-mask mask-bottom" id="maskBottom"></div>
+    <div class="scanner-mask mask-left" id="maskLeft"></div>
+    <div class="scanner-mask mask-right" id="maskRight"></div>
+  </div>
+
+  <!-- 状态提示 -->
+  <div class="scanner-status" id="scannerStatus">请将二维码对准取景框</div>
+
+  <!-- 底部操作区 -->
+  <div class="scanner-actions" id="scannerActions">
+    <div class="scanner-hint" id="scannerHint">
+      <div class="hint-icon">&#128269;</div>
+      <div class="hint-text">将 PC 端网盘<br>登录二维码对准取景框</div>
+    </div>
+  </div>
+</div>
+
+<script>
+var token = '<%= token %>';
+var capturedQR = '';
+var confirming = false;
+var scanStream = null;
+var scanTimer = null;
+
+// 计算遮罩层位置
+function updateMasks() {
+  var vp = document.getElementById('scanViewport');
+  var rect = vp.getBoundingClientRect();
+  var vw = window.innerWidth;
+  var vh = window.innerHeight;
+
+  document.getElementById('maskTop').style.cssText =
+    'top:0;left:0;right:0;height:' + rect.top + 'px';
+  document.getElementById('maskBottom').style.cssText =
+    'top:' + rect.bottom + 'px;left:0;right:0;height:' + (vh - rect.bottom) + 'px';
+  document.getElementById('maskLeft').style.cssText =
+    'top:' + rect.top + 'px;left:0;bottom:' + (vh - rect.bottom) + 'px;width:' + rect.left + 'px';
+  document.getElementById('maskRight').style.cssText =
+    'top:' + rect.top + 'px;right:0;bottom:' + (vh - rect.bottom) + 'px;width:' + (vw - rect.right) + 'px';
+}
+
+async function openScanner() {
+  capturedQR = '';
+  confirming = false;
+  var overlay = document.getElementById('scannerOverlay');
+  overlay.classList.add('show');
+
+  // 重置UI状态
+  document.getElementById('scannerStatus').textContent = '正在启动摄像头...';
+  document.getElementById('scannerHint').style.display = 'flex';
+  document.getElementById('scannerStatus').innerHTML = '正在启动摄像头...';
+
+  updateMasks();
+  window.addEventListener('resize', updateMasks);
+
+  try {
+    scanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 640 } }
+    });
+    var video = document.getElementById('scanVideo');
+    video.srcObject = scanStream;
+    await video.play();
+
+    // 启动后再更新一次遮罩
+    setTimeout(updateMasks, 100);
+
+    document.getElementById('scannerStatus').textContent = '请将二维码对准取景框';
+    document.getElementById('scannerHint').style.display = 'flex';
+    scanLoop();
+  } catch (err) {
+    document.getElementById('scannerStatus').innerHTML =
+      '<span style="color:#FF4D4F;">摄像头启动失败</span><br><small style="color:#999;">请确保使用HTTPS访问并授予摄像头权限</small>';
+  }
+}
+
+function scanLoop() {
+  if (capturedQR || confirming || !document.getElementById('scannerOverlay').classList.contains('show')) return;
+  var video = document.getElementById('scanVideo');
+  if (video.readyState < video.HAVE_ENOUGH_DATA) { scanTimer = requestAnimationFrame(scanLoop); return; }
+  var canvas = document.getElementById('scanCanvas');
+  var w = video.videoWidth || 640, h = video.videoHeight || 480;
+  canvas.width = w; canvas.height = h;
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, w, h);
+  var imageData = ctx.getImageData(0, 0, w, h);
+  try {
+    var code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
+    if (code && code.data) { capturedQR = code.data; stopCamera(); showConfirm(code.data); return; }
+  } catch(e) {}
+  scanTimer = requestAnimationFrame(scanLoop);
+}
+
+function stopCamera() {
+  if (scanTimer) { cancelAnimationFrame(scanTimer); scanTimer = null; }
+  if (scanStream) { scanStream.getTracks().forEach(function(t) { t.stop(); }); scanStream = null; }
+}
+
+function closeScanner() {
+  stopCamera();
+  window.removeEventListener('resize', updateMasks);
+  document.getElementById('scannerOverlay').classList.remove('show');
+  capturedQR = '';
+  confirming = false;
+}
+
+// ======== 拖拽上传 ========
+var uploadZone = document.getElementById('uploadZone');
+if (uploadZone) {
+  ['dragenter', 'dragover'].forEach(function(evt) {
+    uploadZone.addEventListener(evt, function(e) { e.preventDefault(); e.stopPropagation(); uploadZone.classList.add('drag-over'); });
+  });
+  ['dragleave', 'drop'].forEach(function(evt) {
+    uploadZone.addEventListener(evt, function(e) { e.preventDefault(); e.stopPropagation(); uploadZone.classList.remove('drag-over'); });
+  });
+  uploadZone.addEventListener('drop', function(e) {
+    var files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      document.getElementById('fileInput').files = files;
+      handleFile(document.getElementById('fileInput'));
+    }
+  });
+  document.addEventListener('dragover', function(e) { e.preventDefault(); e.stopPropagation(); });
+  document.addEventListener('drop', function(e) { e.preventDefault(); e.stopPropagation();
+    var files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      uploadZone.classList.add('drag-over');
+      setTimeout(function(){ uploadZone.classList.remove('drag-over'); }, 300);
+      document.getElementById('fileInput').files = files;
+      handleFile(document.getElementById('fileInput'));
+    }
+  });
+}
+
+function handleFile(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var el = document.getElementById('uploadStatus');
+  el.textContent = '正在识别...';
+  var img = new Image();
+  img.onload = function() {
+    var c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    var ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
+    var id = ctx.getImageData(0, 0, img.width, img.height);
+    try {
+      var code = jsQR(id.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+      if (!code) code = jsQR(id.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+      if (code && code.data) { capturedQR = code.data; el.innerHTML = '<span style="color:#52C41A;">已识别二维码</span>'; showConfirmScreenshot(code.data, el); }
+      else el.textContent = '未识别到二维码，请确认截图包含完整清晰的二维码';
+    } catch(e) { el.textContent = '识别失败: ' + (e.message || e); }
+  };
+  img.onerror = function() { el.textContent = '图片加载失败'; };
+  img.src = URL.createObjectURL(file);
+}
+
+// ======== 扫码确认 UI ========
+function showConfirm(qrText) {
+  // 在取景框下方显示确认按钮，不隐藏取景框
+  document.getElementById('scannerStatus').innerHTML =
+    '<span style="color:#52C41A;">已检测到二维码</span>';
+
+  var actions = document.getElementById('scannerActions');
+  actions.innerHTML =
+    '<button class="confirm-btn" onclick="doConfirm()">确认登录</button>' +
+    '<button class="retry-btn" onclick="resetScan()">重新扫描</button>';
+}
+
+function showConfirmScreenshot(qrText, el) {
+  el.innerHTML =
+    '<div style="margin-bottom:8px;color:#333;">已检测到二维码</div>' +
+    '<button onclick="doConfirmScreenshot()" style="padding:12px 40px;background:#4A90D9;color:#fff;border:none;border-radius:8px;font-size:16px;cursor:pointer;">确认登录</button>' +
+    '<button onclick="resetScreenshot()" style="padding:10px 20px;background:none;border:1px solid #D9D9D9;color:#999;border-radius:8px;font-size:14px;cursor:pointer;margin-left:10px;">重新扫描</button>';
+}
+
+async function doConfirm() {
+  confirming = true;
+  document.getElementById('scannerStatus').textContent = '正在确认登录...';
+  document.getElementById('scannerActions').innerHTML = '';
+  try {
+    var res = await fetch('/s/' + token + '/confirm', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ qrContent: capturedQR }),
+    });
+    var data = await res.json();
+    if (data.success) {
+      var extra = data.rotated ? ' (已切换备用账号: ' + data.rotatedTo + ')' : '';
+      var usedInfo = data.remainingUses !== undefined ? '<br><small style="color:#999;">已用次数：' + (data.maxUses - data.remainingUses) + ' / ' + data.maxUses + ' 次</small>' : '';
+      document.getElementById('scannerStatus').innerHTML = '<span style="color:#52C41A;">登录成功！PC端网盘将自动登录</span>' + extra + usedInfo;
+      document.getElementById('scannerActions').innerHTML = '';
+      // 刷新页面卡密信息
+      refreshCardInfo(data);
+      setTimeout(closeScanner, 2000);
+    } else {
+      document.getElementById('scannerStatus').innerHTML = '<span style="color:#FF4D4F;">确认失败: ' + (data.message || '') + '</span>';
+      document.getElementById('scannerActions').innerHTML =
+        '<button class="retry-btn" onclick="resetScan()">重新扫描</button>';
+    }
+  } catch (err) {
+    document.getElementById('scannerStatus').innerHTML = '<span style="color:#FF4D4F;">网络错误: ' + (err.message || err) + '</span>';
+    document.getElementById('scannerActions').innerHTML =
+      '<button class="retry-btn" onclick="resetScan()">重新扫描</button>';
+  }
+  confirming = false;
+}
+
+async function doConfirmScreenshot() {
+  confirming = true;
+  var el = document.getElementById('uploadStatus');
+  el.textContent = '正在确认登录...';
+  try {
+    var res = await fetch('/s/' + token + '/confirm', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ qrContent: capturedQR }),
+    });
+    var data = await res.json();
+    if (data.success) {
+      var extra = data.rotated ? ' (已切换备用账号: ' + data.rotatedTo + ')' : '';
+      var usedInfo = data.remainingUses !== undefined ? '<br><small style="color:#999;">已用次数：' + (data.maxUses - data.remainingUses) + ' / ' + data.maxUses + ' 次</small>' : '';
+      el.innerHTML = '<span style="color:#52C41A;">登录成功！PC端网盘将自动登录</span>' + extra + usedInfo;
+      refreshCardInfo(data);
+    } else {
+      el.innerHTML = '<span style="color:#FF4D4F;">确认失败: ' + (data.message || '') + '</span>' +
+        '<br><button onclick="resetScreenshot()" style="margin-top:8px;padding:8px 20px;background:none;border:1px solid #D9D9D9;color:#999;border-radius:6px;font-size:13px;cursor:pointer;">重新扫描</button>';
+    }
+  } catch (err) {
+    el.innerHTML = '<span style="color:#FF4D4F;">网络错误: ' + (err.message || err) + '</span>' +
+      '<br><button onclick="resetScreenshot()" style="margin-top:8px;padding:8px 20px;background:none;border:1px solid #D9D9D9;color:#999;border-radius:6px;font-size:13px;cursor:pointer;">重新扫描</button>';
+  }
+  confirming = false;
+}
+
+function refreshCardInfo(data) {
+  if (data.remainingUses === undefined) return;
+  var newCount = data.maxUses - data.remainingUses;
+  // 更新卡密信息中的已用次数和状态
+  var rows = document.querySelectorAll('.card .info-row');
+  for (var i = 0; i < rows.length; i++) {
+    var label = rows[i].querySelector('.label');
+    if (!label) continue;
+    if (label.textContent === '已用次数') {
+      rows[i].querySelector('.value').textContent = newCount + ' / ' + data.maxUses + ' 次';
+    }
+    if (label.textContent === '状态') {
+      var valueEl = rows[i].querySelector('.value');
+      if (newCount >= data.maxUses) {
+        valueEl.innerHTML = '<span class="status-dot dot-red"></span>已达上限';
+      }
+    }
+  }
+}
+
+async function resetScan() {
+  capturedQR = '';
+  confirming = false;
+  document.getElementById('scannerStatus').textContent = '正在重新启动摄像头...';
+  document.getElementById('scannerActions').innerHTML =
+    '<div class="scanner-hint" id="scannerHint"><div class="hint-icon">&#128269;</div><div class="hint-text">将 PC 端网盘<br>登录二维码对准取景框</div></div>';
+
+  // 重新获取摄像头并启动扫描
+  try {
+    scanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 640 } }
+    });
+    var video = document.getElementById('scanVideo');
+    video.srcObject = scanStream;
+    await video.play();
+    document.getElementById('scannerStatus').textContent = '请将二维码对准取景框';
+    scanLoop();
+  } catch (err) {
+    document.getElementById('scannerStatus').innerHTML =
+      '<span style="color:#FF4D4F;">摄像头启动失败</span><br><small style="color:#999;">' + (err.message || err) + '</small>';
+  }
+}
+
+function resetScreenshot() {
+  capturedQR = '';
+  confirming = false;
+  document.getElementById('uploadStatus').textContent = '';
+  document.getElementById('fileInput').value = '';
+}
+</script>
+</body>
+</html>

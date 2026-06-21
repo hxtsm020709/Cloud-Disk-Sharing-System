@@ -1,0 +1,531 @@
+<!-- ======== 账号信息 ======== -->
+<div class="card">
+  <div class="card-title">账号信息</div>
+  <div class="info-rows">
+    <div class="info-row">
+      <span class="info-label">账号总数</span>
+      <span class="info-value"><%= stats.totalAccounts %></span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Cookie 有效</span>
+      <span class="info-value" style="color: <%= (stats.validCookies || 0) > 0 ? '#52C41A' : '#333' %>;"><%= stats.validCookies || 0 %></span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Cookie 过期</span>
+      <span class="info-value" style="color: <%= (stats.expiredCookies || 0) > 0 ? '#FF4D4F' : '#333' %>;"><%= stats.expiredCookies || 0 %></span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">有效链接</span>
+      <span class="info-value"><%= stats.activeLinks %></span>
+    </div>
+    <div class="info-row" style="border-bottom: none;">
+      <span class="info-label">即将到期</span>
+      <span class="info-value" style="color: <%= stats.expiringCount > 0 ? '#FAAD14' : '#333' %>;"><%= stats.expiringCount %></span>
+    </div>
+  </div>
+  <% if (expiringAccounts.length > 0) { %>
+  <div class="alert alert-warning" style="margin-top:12px;">
+    &#9200; 以下账号会员即将在 7 天内到期：
+    <% expiringAccounts.forEach(function(acc, i) { %><%= i > 0 ? '、' : '' %><a href="/admin/accounts/<%= acc.id %>"><%= acc.nickname %></a> (<%= acc.vip_expire_date %>)<% }); %>
+  </div>
+  <% } %>
+</div>
+
+<!-- ======== 账号池状态 ======== -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">
+    <span class="card-title">账号池状态 <span class="card-sub">（负载均衡分配）</span></span>
+    <span style="font-size:13px;color:#999;">
+      池链接 <%= totalPoolLinks %> 条 &nbsp;|&nbsp; 累计使用 <%= totalPoolUsage %> 次
+    </span>
+  </div>
+  <% if (poolStats.length === 0) { %>
+    <div class="empty-state"><p>暂无账号池数据，请先添加账号并生成分享池链接</p></div>
+  <% } else { %>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <% poolStats.forEach(function(ps) {
+        var pct = Math.round((ps.usageScore / (maxUsage || 1)) * 100);
+        var barColor = pct < 30 ? '#52C41A' : (pct < 70 ? '#FAAD14' : '#FF4D4F');
+      %>
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #F5F5F5;<%= ps.isPaused ? 'opacity:0.5;' : '' %>">
+        <div style="width:120px;min-width:0;">
+          <strong style="font-size:14px;"><%= ps.nickname %></strong>
+          <% if (ps.vipType === 'svip') { %><span class="tag tag-warning" style="font-size:10px;">SVIP</span><% } %>
+          <% if (ps.isPaused) { %><span class="tag tag-danger" style="font-size:10px;margin-left:2px;">停用</span><% } %>
+        </div>
+        <div style="width:60px;text-align:center;">
+          <% if (ps.isPaused) { %><span class="tag tag-default" style="font-size:10px;">暂停中</span>
+          <% } else if (ps.cookieStatus === 'valid') { %><span class="tag tag-success" style="font-size:10px;">有效</span>
+          <% } else if (ps.cookieStatus === 'expired') { %><span class="tag tag-danger" style="font-size:10px;">过期</span>
+          <% } else { %><span class="tag tag-default" style="font-size:10px;">未知</span><% } %>
+        </div>
+        <div style="flex:1;min-width:80px;">
+          <div style="height:18px;background:#F0F0F0;border-radius:9px;overflow:hidden;position:relative;">
+            <div style="height:100%;width:<%= pct %>%;background:<%= barColor %>;border-radius:9px;transition:width 0.3s;min-width:<%= ps.usageScore > 0 ? '8px' : '0' %>;"></div>
+          </div>
+        </div>
+        <div style="width:80px;text-align:right;font-size:13px;color:#666;">
+          已用 <%= ps.usageScore %> 次
+        </div>
+        <div style="width:50px;text-align:right;font-size:12px;color:#999;">
+          <%= ps.activePoolLinks %> 链接
+        </div>
+      </div>
+      <% }); %>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:12px;font-size:11px;color:#999;">
+      <span><span style="display:inline-block;width:12px;height:12px;background:#52C41A;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>低负载</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:#FAAD14;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>中负载</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:#FF4D4F;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>高负载</span>
+      <span style="margin-left:auto;">下次优先分配：<strong><%= poolStats[0].nickname %></strong></span>
+    </div>
+  <% } %>
+</div>
+
+<!-- ======== 账号列表（独占一行） ======== -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">
+    <span class="card-title">账号列表 <span class="card-sub">(<%= accounts.length %> 个)</span></span>
+    <div class="card-actions">
+      <button class="btn btn-sm btn-primary" onclick="checkAllCookies()" id="checkAllBtn">一键检测</button>
+      <button class="btn btn-sm btn-secondary" onclick="fetchAllVipDash()" id="fetchVipDashBtn">批量抓取账号信息</button>
+      <button class="btn btn-sm btn-secondary" onclick="toggleAddForm()" id="toggleAddBtn">+ 快速添加</button>
+    </div>
+  </div>
+
+  <p id="checkAllMsg" style="font-size:12px;color:#999;margin-bottom:8px;min-height:18px;"></p>
+
+  <!-- 快速添加表单 -->
+  <form id="quickAddForm" class="quick-add-form" onsubmit="quickAdd(event)">
+    <div class="form-group" style="margin:0 0 8px 0;">
+      <label>备注 <span style="color:#FF4D4F;">*</span></label>
+      <input type="text" name="notes" class="form-control" placeholder="例如：公司共享账号" required>
+    </div>
+    <div class="quick-add-grid">
+      <div class="form-group" style="margin:0;">
+        <label>昵称 <span style="color:#999;font-size:12px;">(选填)</span></label>
+        <input type="text" name="nickname" class="form-control" placeholder="留空则自动获取">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>手机号 <span style="color:#999;font-size:12px;">(选填)</span></label>
+        <input type="text" name="phone" class="form-control" placeholder="留空则自动获取">
+      </div>
+    </div>
+    <div class="form-group" style="margin:8px 0 0 0;">
+      <label>Cookie <span style="color:#FF4D4F;">*</span></label>
+      <textarea name="cookie_text" class="form-control" rows="2" required style="resize:vertical;font-size:12px;"></textarea>
+    </div>
+    <div class="quick-add-actions">
+      <button type="submit" class="btn btn-sm btn-primary">确认添加</button>
+      <button type="button" class="btn btn-sm btn-secondary" onclick="toggleAddForm()">取消</button>
+      <span id="quickAddMsg" style="font-size:12px;"></span>
+    </div>
+  </form>
+
+  <% if (accounts.length === 0) { %>
+    <div class="empty-state"><p>暂无账号，点击「+ 快速添加」添加第一个</p></div>
+  <% } else { %>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th>账号</th><th>会员</th><th>Cookie</th><th style="text-align:center;">操作</th></tr>
+        </thead>
+        <tbody>
+          <% accounts.forEach(function(acc) { %>
+          <tr>
+            <td>
+              <strong><%= acc.nickname %></strong>
+              <% if (acc.is_paused) { %><span class="tag tag-danger" style="font-size:10px;margin-left:4px;">已暂停</span><% } %>
+              <% if (acc.vip_expire_date) { %><br><small style="color:#999;">到期 <%= acc.vip_expire_date %></small><% } %>
+            </td>
+            <td>
+              <% if (acc.vip_type === 'svip') { %><span class="tag tag-warning">SVIP</span>
+              <% } else if (acc.vip_type === 'vip') { %><span class="tag tag-default">VIP</span>
+              <% } else { %><span style="font-size:12px;color:#999;">普通</span><% } %>
+            </td>
+            <td id="dash-status-<%= acc.id %>">
+              <% if (acc.cookie_status === 'valid') { %><span class="tag tag-success">有效</span>
+              <% } else if (acc.cookie_status === 'expired') { %><span class="tag tag-danger">过期</span>
+              <% } else { %><span class="tag tag-default">未知</span><% } %>
+            </td>
+            <td style="text-align:center;white-space:nowrap;">
+              <button class="btn btn-sm btn-secondary" onclick="checkOne(<%= acc.id %>)" id="dash-btn-<%= acc.id %>" title="检测 Cookie">检测</button>
+              <button class="btn btn-sm btn-secondary" onclick="togglePause(<%= acc.id %>, <%= acc.is_paused || 0 %>)" id="dash-pause-<%= acc.id %>"><%= acc.is_paused ? '恢复' : '暂停' %></button>
+              <a href="/admin/accounts/<%= acc.id %>" class="btn btn-sm btn-secondary">编辑</a>
+              <button class="btn btn-sm btn-danger" onclick="delAccount(<%= acc.id %>, '<%= acc.nickname %>')">删除</button>
+            </td>
+          </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</div>
+
+<!-- ======== 双栏：独享 + 分享池 ======== -->
+<div class="dashboard-grid">
+
+  <!-- ===== 左栏：生成独享链接 ===== -->
+  <div class="dash-panel">
+    <div class="card">
+      <div class="card-title">生成独享链接</div>
+      <% if (accounts.length === 0) { %>
+        <div class="alert alert-warning">请先添加账号。</div>
+      <% } else { %>
+        <form id="genLinkForm" onsubmit="genLink(event)">
+          <div class="link-form-grid">
+            <div class="form-group" style="margin:0;">
+              <label>选择账号</label>
+              <select name="account_id" class="form-control" required>
+                <option value="">-- 请选择 --</option>
+                <% accounts.forEach(function(acc) { %><option value="<%= acc.id %>"><%= acc.nickname %></option><% }); %>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label>有效期</label>
+              <select name="expire_hours" class="form-control">
+                <% expireOptions.forEach(function(opt) { %><option value="<%= opt.hours %>"><%= opt.label %></option><% }); %>
+              </select>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:10px;">生成独享链接</button>
+          <span id="genMsg" style="font-size:12px;"></span>
+        </form>
+        <div id="resultCard" class="link-result">
+          <div class="link-result-row">
+            <code id="linkUrl"></code>
+            <button class="btn btn-sm btn-primary" onclick="copyLink()">复制</button>
+          </div>
+          <small style="color:#999;">到期时间：<span id="linkExpire"></span> &nbsp;|&nbsp; 手机浏览器打开即可使用</small>
+        </div>
+      <% } %>
+
+      <!-- 独享链接记录 -->
+      <% var soloLinks = links.filter(function(l) { return l.is_pool !== 1; }); %>
+      <% if (soloLinks.length > 0) { %>
+      <div class="link-list">
+        <% soloLinks.forEach(function(link) { %>
+        <div class="link-item">
+          <div class="link-info">
+            <strong><%= link.account_nickname || '已删除' %></strong>
+            <span class="link-token">/<%= link.token.slice(0,12) %>...</span>
+            <span style="font-size:11px;color:#999;">x<%= link.use_count %></span>
+          </div>
+          <div class="link-status">
+            <% if (link.status === 'active') { %>
+              <span class="tag tag-success">有效</span>
+              <button class="btn btn-sm btn-secondary" onclick="copyToken('<%= link.token %>')">复制</button>
+              <button class="btn btn-sm btn-danger" onclick="disableLink(<%= link.id %>)">停用</button>
+            <% } else if (link.status === 'expired') { %>
+              <span class="tag tag-default">过期</span>
+            <% } else { %>
+              <span class="tag tag-danger">停用</span>
+            <% } %>
+          </div>
+        </div>
+        <% }); %>
+      </div>
+      <% } %>
+    </div>
+  </div>
+
+  <!-- ===== 右栏：生成分享池链接 ===== -->
+  <div class="dash-panel">
+    <div class="card">
+      <div class="card-title">生成分享池链接</div>
+      <p style="color:#999; font-size:13px; margin-bottom:12px;">每次生成 1 条链接，自动选负载最低的账号；支持批量。</p>
+      <form id="poolForm" onsubmit="genPoolLink(event)" style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap;">
+        <div class="form-group" style="margin:0;">
+          <label>有效期</label>
+          <select name="expire_hours" class="form-control" style="width:120px;">
+            <option value="3">3 小时</option>
+            <option value="6">6 小时</option>
+            <option value="24" selected>24 小时</option>
+            <option value="72">3 天</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>数量</label>
+          <input type="number" name="count" class="form-control" value="1" min="1" max="50" style="width:80px;">
+        </div>
+        <button type="submit" class="btn btn-primary">生成链接</button>
+        <span id="poolMsg" style="font-size:12px;"></span>
+      </form>
+      <div id="poolResults" style="display:none;margin-top:12px;">
+        <div class="alert alert-info" id="poolSummary"></div>
+        <div style="max-height:300px;overflow-y:auto;">
+          <table>
+            <thead><tr><th>账号</th><th>负载</th><th>链接</th><th>复制</th></tr></thead>
+            <tbody id="poolTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 分享池链接记录 -->
+      <% var poolLinks = links.filter(function(l) { return l.is_pool === 1; }); %>
+      <% if (poolLinks.length > 0) { %>
+      <div class="link-list">
+        <% poolLinks.forEach(function(link) { %>
+        <div class="link-item">
+          <div class="link-info">
+            <strong><%= link.account_nickname || '已删除' %></strong>
+            <span class="link-token">/<%= link.token.slice(0,12) %>...</span>
+            <span style="font-size:11px;color:#999;">x<%= link.use_count %></span>
+          </div>
+          <div class="link-status">
+            <% if (link.status === 'active') { %>
+              <span class="tag tag-success">有效</span>
+              <button class="btn btn-sm btn-secondary" onclick="copyToken('<%= link.token %>')">复制</button>
+              <% if (link.is_pool === 1) { %><button class="btn btn-sm btn-secondary" onclick="rotateAccount(<%= link.id %>, this)">切换</button><% } %>
+              <button class="btn btn-sm btn-danger" onclick="disableLink(<%= link.id %>)">停用</button>
+            <% } else if (link.status === 'expired') { %>
+              <span class="tag tag-default">过期</span>
+            <% } else { %>
+              <span class="tag tag-danger">停用</span>
+            <% } %>
+          </div>
+        </div>
+        <% }); %>
+      </div>
+      <% } %>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ======== 快速添加 ========
+function toggleAddForm() {
+  var el = document.getElementById('quickAddForm');
+  var btn = document.getElementById('toggleAddBtn');
+  var isVisible = el.style.display !== 'none' && getComputedStyle(el).display !== 'none';
+  if (isVisible) {
+    el.style.display = 'none';
+    btn.textContent = '+ 快速添加';
+  } else {
+    el.style.display = 'block';
+    btn.textContent = '收起';
+  }
+}
+
+async function quickAdd(e) {
+  e.preventDefault();
+  var f = e.target;
+  var msg = document.getElementById('quickAddMsg');
+  msg.textContent = '添加中...'; msg.style.color = '#999';
+  try {
+    var res = await fetch('/admin/api/accounts', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        notes: f.notes.value,
+        nickname: f.nickname.value,
+        phone: f.phone.value,
+        cookie_text: f.cookie_text.value,
+      })
+    });
+    var contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('html')) {
+      throw new Error('服务器返回了HTML (HTTP ' + res.status + ')，请检查是否已登录');
+    }
+    var data = await res.json();
+    if (data.success) { msg.textContent = '已添加，刷新中...'; msg.style.color = '#52C41A'; setTimeout(function(){ location.reload(); }, 800); }
+    else { msg.textContent = data.message; msg.style.color = '#FF4D4F'; }
+  } catch(err) { msg.textContent = '错误: ' + (err.message || '网络错误'); msg.style.color = '#FF4D4F'; }
+}
+
+// ======== Cookie 检测 ========
+async function checkOne(id) {
+  var btn = document.getElementById('dash-btn-' + id);
+  var cell = document.getElementById('dash-status-' + id);
+  btn.disabled = true; btn.textContent = '...';
+  cell.innerHTML = '<span class="tag tag-default">检测中...</span>';
+  try {
+    var res = await fetch('/admin/api/accounts/' + id + '/check-cookie', { method: 'POST' });
+    var data = await res.json();
+    if (data.success && data.result) {
+      var html = data.result.valid
+        ? '<span class="tag tag-success">有效</span>'
+        : '<span class="tag tag-danger">过期</span>';
+      if (data.poolLinksReassigned > 0) {
+        html += ' <small style="color:#FAAD14;">(' + data.poolLinksReassigned + ' 链接已切换)</small>';
+      }
+      cell.innerHTML = html;
+    }
+  } catch(e) {}
+  btn.disabled = false; btn.textContent = '检测';
+}
+
+async function checkAllCookies() {
+  var btn = document.getElementById('checkAllBtn');
+  var msg = document.getElementById('checkAllMsg');
+  btn.disabled = true; btn.textContent = '检测中...';
+  msg.textContent = '正在逐个检测所有账号...';
+  try {
+    var res = await fetch('/admin/api/accounts/check-all-cookies', { method: 'POST' });
+    var data = await res.json();
+    if (data.results) {
+      var valid = data.results.filter(function(r){ return r.valid; }).length;
+      var parts = ['检测完成：' + valid + ' 有效，' + (data.results.length - valid) + ' 过期'];
+      if (data.poolLinksReassigned > 0) {
+        parts.push(data.poolLinksReassigned + ' 个池链接已自动切换账号');
+      }
+      msg.textContent = parts.join('；');
+      msg.style.color = '#52C41A';
+      data.results.forEach(function(r) {
+        var cell = document.getElementById('dash-status-' + r.id);
+        if (cell) {
+          var html = r.valid
+            ? '<span class="tag tag-success">有效</span>'
+            : '<span class="tag tag-danger">过期</span>';
+          if (r.reassignedLinks > 0) {
+            html += ' <small style="color:#FAAD14;">(' + r.reassignedLinks + ' 链接已切换)</small>';
+          }
+          cell.innerHTML = html;
+        }
+      });
+      setTimeout(function(){ location.reload(); }, 2500);
+    }
+  } catch(e) { msg.textContent = '检测失败'; msg.style.color = '#FF4D4F'; }
+  btn.disabled = false; btn.textContent = '一键检测';
+}
+
+// ======== 账号暂停/恢复 ========
+async function togglePause(id, currentState) {
+  var res = await fetch('/admin/api/accounts/' + id + '/toggle-pause', { method: 'POST' });
+  var data = await res.json();
+  if (data.success) {
+    location.reload();
+  } else {
+    alert(data.message);
+  }
+}
+
+// ======== 账号删除 ========
+async function delAccount(id, name) {
+  var depRes = await fetch('/admin/api/accounts/' + id + '/dependent-links');
+  var dep = await depRes.json();
+  var msg = '确定删除「' + name + '」？';
+  if (dep.poolCount > 0) msg += '\n\n⚠ ' + dep.poolCount + ' 个分享池链接将自动切换账号。';
+  if (dep.soloCount > 0) msg += '\n\n⚠ ' + dep.soloCount + ' 个独享链接将失效。';
+  if (!confirm(msg)) return;
+  var res = await fetch('/admin/api/accounts/' + id + '/delete', { method: 'POST' });
+  var data = await res.json();
+  alert(data.message);
+  location.reload();
+}
+
+// ======== 批量抓取账号信息 ========
+async function fetchAllVipDash() {
+  if (!confirm('将逐个抓取所有账号的会员信息，确定继续？')) return;
+  var btn = document.getElementById('fetchVipDashBtn');
+  var msg = document.getElementById('checkAllMsg');
+  btn.disabled = true; btn.textContent = '抓取中...';
+  msg.textContent = '正在抓取账号信息...'; msg.style.color = '#999';
+  try {
+    var res = await fetch('/admin/api/accounts/fetch-all-vip', { method: 'POST' });
+    var data = await res.json();
+    if (data.success && data.results) {
+      msg.textContent = '已更新 ' + data.updatedCount + ' / ' + data.total + ' 个账号';
+      msg.style.color = '#52C41A';
+      setTimeout(function(){ location.reload(); }, 1500);
+    } else {
+      msg.textContent = '抓取失败'; msg.style.color = '#FF4D4F';
+    }
+  } catch(e) { msg.textContent = '出错: ' + (e.message || ''); msg.style.color = '#FF4D4F'; }
+  btn.disabled = false; btn.textContent = '批量抓取账号信息';
+}
+
+// ======== 生成分享池链接 ========
+async function genPoolLink(e) {
+  e.preventDefault();
+  var f = e.target;
+  var count = parseInt(f.count.value) || 1;
+  var hours = parseInt(f.expire_hours.value);
+  var msg = document.getElementById('poolMsg');
+  msg.textContent = '生成中...'; msg.style.color = '#999';
+
+  var url = count === 1 ? '/admin/api/links/pool' : '/admin/api/links/batch-pool';
+  var body = count === 1 ? { expire_hours: hours } : { expire_hours: hours, count: count };
+
+  try {
+    var res = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+    var data = await res.json();
+    if (data.success) {
+      var tokens = data.tokens || [data.token];
+      var summary = '已生成 ' + tokens.length + ' 个分享池链接（' + hours + 'h 有效），到期：' + data.expireAt;
+      document.getElementById('poolSummary').textContent = summary;
+      msg.textContent = data.message;
+      msg.style.color = '#52C41A';
+      var tbody = document.getElementById('poolTableBody');
+      tbody.innerHTML = '';
+      tokens.forEach(function(t) {
+        var linkUrl = location.origin + '/s/' + t.token;
+        tbody.innerHTML += '<tr><td>' + t.accountName + (t.vipType ? ' <span class=\"tag tag-warning\">' + t.vipType.toUpperCase() + '</span>' : '') + '</td><td style=\"font-size:11px;color:#999;\">已用 ' + (t.score || 0) + ' 次</td><td><code style=\"font-size:11px;\">' + linkUrl.slice(0,50) + '...</code></td><td><button class=\"btn btn-sm btn-secondary\" onclick=\"copyPoolUrl(\'' + linkUrl + '\')\">复制</button></td></tr>';
+      });
+      document.getElementById('poolResults').style.display = '';
+    } else {
+      msg.textContent = data.message; msg.style.color = '#FF4D4F';
+    }
+  } catch(e) { msg.textContent = '请求失败'; msg.style.color = '#FF4D4F'; }
+}
+
+function copyPoolUrl(url) { navigator.clipboard.writeText(url).then(function(){ alert('已复制: ' + url); }).catch(function(){ prompt('手动复制:', url); }); }
+
+// ======== 生成独享链接 ========
+async function genLink(e) {
+  e.preventDefault();
+  var f = e.target;
+  var msg = document.getElementById('genMsg');
+  msg.textContent = '生成中...'; msg.style.color = '#999';
+  try {
+    var res = await fetch('/admin/api/links', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ account_id: f.account_id.value, expire_hours: f.expire_hours.value })
+    });
+    var data = await res.json();
+    if (data.success) {
+      document.getElementById('linkUrl').textContent = location.origin + '/s/' + data.token;
+      document.getElementById('linkExpire').textContent = data.expireAt.slice(0,16);
+      document.getElementById('resultCard').style.display = '';
+      msg.textContent = '';
+      setTimeout(function(){ location.reload(); }, 3000);
+    } else { msg.textContent = data.message; msg.style.color = '#FF4D4F'; }
+  } catch(err) { msg.textContent = '网络错误'; msg.style.color = '#FF4D4F'; }
+}
+
+function copyLink() {
+  var t = document.getElementById('linkUrl').textContent;
+  navigator.clipboard.writeText(t).then(function(){ alert('链接已复制'); }).catch(function(){ prompt('手动复制:', t); });
+}
+
+function copyToken(token) {
+  var t = location.origin + '/s/' + token;
+  navigator.clipboard.writeText(t).then(function(){ alert('链接已复制'); }).catch(function(){ prompt('手动复制:', t); });
+}
+
+async function disableLink(id) {
+  if (!confirm('确定停用此链接？')) return;
+  await fetch('/admin/api/links/' + id + '/disable', { method: 'POST' });
+  location.reload();
+}
+
+async function rotateAccount(linkId, btn) {
+  if (!confirm('确定要为此链接切换账号吗？系统将自动分配负载最低的有效账号。')) return;
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    var res = await fetch('/admin/api/links/' + linkId + '/rotate-account', { method: 'POST' });
+    var data = await res.json();
+    if (data.success) {
+      alert(data.rotated ? '已切换到: ' + data.newAccountName : data.message);
+      location.reload();
+    } else {
+      alert(data.message);
+    }
+  } catch(e) { alert('切换失败'); }
+  btn.disabled = false;
+  btn.textContent = '切换';
+}
+</script>
