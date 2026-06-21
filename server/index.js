@@ -85,7 +85,7 @@ async function start() {
   app.use('/admin', links.router);
 
   // 分享链接 — 扫码登录页
-  app.get('/s/:token', async (req, res) => {
+  app.get('/s/:token', (req, res) => {
     const db = require('./database');
     let link = db.get("SELECT * FROM share_links WHERE token = ?", [req.params.token]);
     if (!link) {
@@ -113,18 +113,6 @@ async function start() {
     }
 
     let account = db.get('SELECT * FROM accounts WHERE id = ? AND is_deleted = 0', [link.account_id]);
-
-    // 账号被停用或Cookie失效时，尝试自动切换到可用账号
-    if (account && (account.is_paused === 1 || account.cookie_status === 'expired') && link.is_pool === 1) {
-      const { reassignPoolLinksForAccount } = require('./routes/links');
-      await reassignPoolLinksForAccount(account.id);
-      // 重新读取链接（可能已换到新账号）
-      const refreshedLink = db.get('SELECT * FROM share_links WHERE id = ?', [link.id]);
-      if (refreshedLink && refreshedLink.account_id !== account.id) {
-        link = refreshedLink;
-        account = db.get('SELECT * FROM accounts WHERE id = ? AND is_deleted = 0', [link.account_id]);
-      }
-    }
 
     let statusText = '正常';
     let statusClass = 'dot-green';
