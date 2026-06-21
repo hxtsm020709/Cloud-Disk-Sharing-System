@@ -49,7 +49,6 @@ async function start() {
   // 分享链接 — 扫码登录页
   app.get('/s/:token', (req, res) => {
     const db = require('./database');
-    // 先查任何状态的链接（不过滤 status）
     let link = db.get("SELECT * FROM share_links WHERE token = ?", [req.params.token]);
     if (!link) {
       return res.render('scan-expired', { layout: false });
@@ -59,7 +58,6 @@ async function start() {
     const pad = n => String(n).padStart(2, '0');
     const fmtNow = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-    // 首次打开：开始计时
     if (link.status === 'active' && !link.first_used_at) {
       const expireDate = new Date(now.getTime() + (link.expire_hours || 24) * 3600000);
       const expireAt = `${expireDate.getFullYear()}-${pad(expireDate.getMonth()+1)}-${pad(expireDate.getDate())} ${pad(expireDate.getHours())}:${pad(expireDate.getMinutes())}:${pad(expireDate.getSeconds())}`;
@@ -68,7 +66,6 @@ async function start() {
       link.expire_at = expireAt;
     }
 
-    // 检查是否过期
     if (link.status === 'active' && link.expire_at) {
       const expireDate = new Date(link.expire_at.replace(' ', 'T'));
       if (expireDate <= now) {
@@ -79,7 +76,6 @@ async function start() {
 
     const account = db.get('SELECT * FROM accounts WHERE id = ? AND is_deleted = 0', [link.account_id]);
 
-    // 根据状态决定状态文本
     let statusText = '正常';
     let statusClass = 'dot-green';
     if (link.status === 'expired') { statusText = '已过期'; statusClass = 'dot-yellow'; }
@@ -116,14 +112,12 @@ async function start() {
 
     console.log('[confirm] QR sign:', (qrContent.match(/sign=([^&]+)/) || [])[1]?.slice(0, 16) || '?');
 
-    // 查找活跃链接：未开始计时的始终有效，已计时的检查过期时间
     let link = db.get(
       "SELECT * FROM share_links WHERE token = ? AND status = 'active' AND (first_used_at IS NULL OR expire_at > datetime('now', 'localtime'))",
       [req.params.token]
     );
     if (!link) return res.json({ success: false, message: '链接已失效' });
 
-    // 首次使用时启动计时
     if (!link.first_used_at) {
       const now = new Date();
       const pad = n => String(n).padStart(2, '0');
@@ -141,7 +135,6 @@ async function start() {
       return res.json({ success: false, message: `该链接已达到使用上限（${maxUses}次），已自动停用` });
     }
 
-    // 获取当前账号并尝试登录
     let account = db.get('SELECT * FROM accounts WHERE id = ? AND is_deleted = 0', [link.account_id]);
     if (!account) {
       return res.json({ success: false, message: '账号不可用，请联系管理员' });
@@ -151,21 +144,14 @@ async function start() {
     try { cookieText = decrypt(account.cookie_encrypted); }
     catch (e) { return res.json({ success: false, message: 'Cookie 解密失败' }); }
 
-    // 尝试确认登录
     let result = await confirmQRLogin(qrContent, cookieText);
 
-    // 失败时打印诊断信息到控制台
     if (!result.success) {
       console.log('[confirm] FAILED for account:', account.nickname);
       console.log('[confirm]', (result.requests || '').split('\n').join('\n[confirm] '));
     }
 
-    // 如果登录失败且链接是分享池类型，自动切换账号重试
     if (!result.success && link.is_pool === 1) {
-      // 以下情况不应标记 Cookie 过期：
-      //   - errno=400023: 验证拦截
-      //   - qrExpired: 二维码本身已过期
-      //   - 消息中包含 QR/二维码相关关键词
       const isVerifyBlock = result.errno === 400023;
       const isQrExpired = result.qrExpired === true;
       const isQrRelated = /二维码|qr.*(过期|失效|超时|expired|invalid|timeout)/i.test(result.message || '');
@@ -177,7 +163,6 @@ async function start() {
 
       console.log(`[confirm] 登录失败${isVerifyBlock ? '(验证拦截)' : isQrExpired ? '(QR过期)' : isQrRelated ? '(QR问题)' : ''}，尝试切换备用账号...`);
 
-      // 找其他有效账号
       const allAccounts = db.all('SELECT * FROM accounts WHERE is_deleted = 0 AND id != ?', [link.account_id]);
       let rotated = false;
 
@@ -215,10 +200,8 @@ async function start() {
       }
     }
 
-    // 登录成功后更新使用次数
     if (result.success) {
       db.run('UPDATE share_links SET use_count = use_count + 1 WHERE id = ?', [link.id]);
-      // 刷新 link 数据
       link = db.get('SELECT * FROM share_links WHERE id = ?', [link.id]);
     }
 
@@ -226,7 +209,6 @@ async function start() {
     result.currentCount = link.use_count;
     result.remainingUses = Math.max(0, maxUses - link.use_count);
 
-    // 记录日志
     db.run(
       'INSERT INTO usage_logs (share_link_id, account_id, action, ip_address, user_agent, details) VALUES (?, ?, ?, ?, ?, ?)',
       [link.id, account.id, result.success ? 'login_success' : 'login_fail', req.ip, req.get('user-agent') || '', result.message]
@@ -253,29 +235,32 @@ async function start() {
     return '127.0.0.1';
   }
 
-  // HTTP 服务器
-  http.createServer(app).listen(config.port, config.host, () => {
-    console.log(`HTTP 服务器: http://localhost:${config.port}`);
-  });
-
-  // HTTPS 服务器
+  // HTTPS 证书存在则启动 HTTPS（本地部署），否则仅 HTTP（云端部署时平台在边缘层提供 HTTPS）
   const certDir = path.join(__dirname, '..', 'data', 'certs');
-  const httpsOptions = {
-    key: fs.readFileSync(path.join(certDir, 'localhost-key.pem')),
-    cert: fs.readFileSync(path.join(certDir, 'localhost-cert.pem')),
-  };
-
-  const httpsPort = config.port + 443; // 3443
+  const keyPath = path.join(certDir, 'localhost-key.pem');
+  const certPath = path.join(certDir, 'localhost-cert.pem');
+  const hasCerts = fs.existsSync(keyPath) && fs.existsSync(certPath);
   const lanIP = getLanIP();
 
-  https.createServer(httpsOptions, app).listen(httpsPort, config.host, () => {
-    console.log(`HTTPS 服务器: https://localhost:${httpsPort}`);
-    console.log(`管理后台: https://localhost:${httpsPort}/admin/login`);
-    if (lanIP !== '127.0.0.1') {
-      console.log(`手机访问: https://${lanIP}:${httpsPort}/admin/login`);
-      console.log(`员工扫码: https://${lanIP}:${httpsPort}/s/<token>`);
-    }
-    console.log(`注意: 自签名证书需要在手机浏览器中手动信任`);
+  if (hasCerts) {
+    const httpsOptions = {
+      key: fs.readFileSync(keyPath),
+      cert: fs.readFileSync(certPath),
+    };
+    const httpsPort = config.port + 443;
+    https.createServer(httpsOptions, app).listen(httpsPort, config.host, () => {
+      console.log(`HTTPS 服务器: https://localhost:${httpsPort}`);
+      if (lanIP !== '127.0.0.1') {
+        console.log(`手机访问: https://${lanIP}:${httpsPort}/admin/login`);
+        console.log(`员工扫码: https://${lanIP}:${httpsPort}/s/<token>`);
+      }
+    });
+  }
+
+  http.createServer(app).listen(config.port, config.host, () => {
+    const host = config.host === '0.0.0.0' ? 'localhost' : config.host;
+    console.log(`服务已启动: http://${host}:${config.port}`);
+    console.log(`管理后台: http://${host}:${config.port}/admin/login`);
   });
 }
 
