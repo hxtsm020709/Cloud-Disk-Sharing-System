@@ -183,7 +183,7 @@ async function batchDelete() {
   }
 
   var msg = '确定要删除选中的 ' + ids.length + ' 个账号吗？';
-  if (totalPool > 0) msg += '\n\n⚠ ' + totalPool + ' 个分享池链接将自动切换账号。';
+  if (totalPool > 0) msg += '\n\n⚠ ' + totalPool + ' 个共享链接将自动切换账号。';
   if (totalSolo > 0) msg += '\n\n⚠ ' + totalSolo + ' 个独享链接将失效。';
   msg += '\n\n删除后可在数据库中恢复。';
 
@@ -343,7 +343,7 @@ async function deleteAccount(id, nickname) {
 
   var msg = '确定要删除账号「' + nickname + '」吗？';
   if (dep.poolCount > 0) {
-    msg += '\n\n⚠ 该账号关联了 ' + dep.poolCount + ' 个分享池链接，删除后将自动切换到其他账号。';
+    msg += '\n\n⚠ 该账号关联了 ' + dep.poolCount + ' 个共享链接，删除后将自动切换到其他账号。';
   }
   if (dep.soloCount > 0) {
     msg += '\n\n⚠ 该账号关联了 ' + dep.soloCount + ' 个独享链接，删除后这些链接将失效。';

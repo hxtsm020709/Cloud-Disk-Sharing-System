@@ -40,7 +40,7 @@
     </span>
   </div>
   <% if (poolStats.length === 0) { %>
-    <div class="empty-state"><p>暂无账号池数据，请先添加账号并生成分享池链接</p></div>
+    <div class="empty-state"><p>暂无账号池数据，请先添加账号并生成共享链接</p></div>
   <% } else { %>
     <div style="display:flex;flex-direction:column;gap:8px;">
       <% poolStats.forEach(function(ps) {
@@ -162,7 +162,7 @@
   <% } %>
 </div>
 
-<!-- ======== 双栏：独享 + 分享池 ======== -->
+<!-- ======== 双栏：独享 + 共享链接 ======== -->
 <div class="dashboard-grid">
 
   <!-- ===== 左栏：生成独享链接 ===== -->
@@ -229,10 +229,10 @@
     </div>
   </div>
 
-  <!-- ===== 右栏：生成分享池链接 ===== -->
+  <!-- ===== 右栏：生成共享链接 ===== -->
   <div class="dash-panel">
     <div class="card">
-      <div class="card-title">生成分享池链接</div>
+      <div class="card-title">生成共享链接</div>
       <p style="color:#999; font-size:13px; margin-bottom:12px;">每次生成 1 条链接，自动选负载最低的账号；支持批量。</p>
       <form id="poolForm" onsubmit="genPoolLink(event)" style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap;">
         <div class="form-group" style="margin:0;">
@@ -261,7 +261,7 @@
         </div>
       </div>
 
-      <!-- 分享池链接记录 -->
+      <!-- 共享链接记录 -->
       <% var poolLinks = links.filter(function(l) { return l.is_pool === 1; }); %>
       <% if (poolLinks.length > 0) { %>
       <div class="link-list">
@@ -406,7 +406,7 @@ async function delAccount(id, name) {
   var depRes = await fetch('/admin/api/accounts/' + id + '/dependent-links');
   var dep = await depRes.json();
   var msg = '确定删除「' + name + '」？';
-  if (dep.poolCount > 0) msg += '\n\n⚠ ' + dep.poolCount + ' 个分享池链接将自动切换账号。';
+  if (dep.poolCount > 0) msg += '\n\n⚠ ' + dep.poolCount + ' 个共享链接将自动切换账号。';
   if (dep.soloCount > 0) msg += '\n\n⚠ ' + dep.soloCount + ' 个独享链接将失效。';
   if (!confirm(msg)) return;
   var res = await fetch('/admin/api/accounts/' + id + '/delete', { method: 'POST' });
@@ -436,7 +436,7 @@ async function fetchAllVipDash() {
   btn.disabled = false; btn.textContent = '批量抓取账号信息';
 }
 
-// ======== 生成分享池链接 ========
+// ======== 生成共享链接 ========
 async function genPoolLink(e) {
   e.preventDefault();
   var f = e.target;
@@ -453,7 +453,7 @@ async function genPoolLink(e) {
     var data = await res.json();
     if (data.success) {
       var tokens = data.tokens || [data.token];
-      var summary = '已生成 ' + tokens.length + ' 个分享池链接（' + hours + 'h 有效），到期：' + data.expireAt;
+      var summary = '已生成 ' + tokens.length + ' 个共享链接（' + hours + 'h 有效），到期：' + data.expireAt;
       document.getElementById('poolSummary').textContent = summary;
       msg.textContent = data.message;
       msg.style.color = '#52C41A';

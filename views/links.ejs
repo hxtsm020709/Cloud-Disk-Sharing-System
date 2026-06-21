@@ -29,9 +29,9 @@
   <% } %>
 </div>
 
-<!-- 生成分享池链接 -->
+<!-- 生成共享链接 -->
 <div class="card" style="margin-top:20px;">
-  <div class="card-title">生成分享池链接</div>
+  <div class="card-title">生成共享链接</div>
   <p style="color:#999; font-size:13px; margin-bottom:12px;">每次生成 1 条链接，自动选负载最低的账号；支持批量。</p>
   <form id="poolForm" onsubmit="genPoolLink(event)" style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap;">
     <div class="form-group" style="margin:0;">
@@ -78,7 +78,7 @@
 <!-- 链接列表 -->
 <div class="card">
   <div class="flex-between" style="margin-bottom: 8px;">
-    <div class="card-title" style="margin: 0;">分享链接管理 <span style="font-size: 13px; color: #999; font-weight: normal;">(共 <%= links.length %> 条)</span></div>
+    <div class="card-title" style="margin: 0;">共享链接管理 <span style="font-size: 13px; color: #999; font-weight: normal;">(共 <%= links.length %> 条)</span></div>
   </div>
 
   <!-- 筛选栏 -->
@@ -94,7 +94,7 @@
     <select name="pool" class="form-control" style="max-width: 120px;">
       <option value="" <%= (typeof poolType === 'undefined' || poolType === '') ? 'selected' : '' %>>全部类型</option>
       <option value="solo" <%= poolType === 'solo' ? 'selected' : '' %>>独享</option>
-      <option value="pool" <%= poolType === 'pool' ? 'selected' : '' %>>分享池</option>
+      <option value="pool" <%= poolType === 'pool' ? 'selected' : '' %>>共享链接</option>
     </select>
     <button type="submit" class="btn btn-primary btn-sm">筛选</button>
     <% if (search || status || poolType) { %>
@@ -129,6 +129,11 @@
         <option value="<%= opt.hours %>"><%= opt.label %></option>
       <% }); %>
     </select>
+    <select id="exportPool" class="form-control" style="max-width: 100px;">
+      <option value="">全部类型</option>
+      <option value="solo">独享</option>
+      <option value="pool">共享</option>
+    </select>
     <button class="btn btn-sm btn-primary" onclick="exportLinks('csv')">导出 CSV</button>
     <button class="btn btn-sm btn-primary" onclick="exportLinks('txt')">导出 TXT</button>
   </div>
@@ -150,7 +155,7 @@
         <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
           <span style="color: #999; font-size: 12px;">使用 <%= link.use_count %> 次</span>
           <% if (link.is_pool === 1) { %>
-            <span class="tag tag-warning" style="font-size:10px;">分享池</span>
+            <span class="tag tag-warning" style="font-size:10px;">共享链接</span>
           <% } else { %>
             <span class="tag tag-default" style="font-size:10px;">独享</span>
           <% } %>
@@ -326,14 +331,16 @@ async function batchDelete() {
 function exportLinks(format) {
   var status = document.getElementById('exportStatus').value;
   var hours = document.getElementById('exportHours').value;
+  var pool = document.getElementById('exportPool').value;
   var params = [];
   if (status) params.push('status=' + status);
   if (hours) params.push('expire_hours=' + hours);
+  if (pool) params.push('pool=' + pool);
   params.push('format=' + (format || 'csv'));
   window.location.href = '/admin/api/links/export?' + params.join('&');
 }
 
-// ======== 生成分享池链接 ========
+// ======== 生成共享链接 ========
 async function genPoolLink(e) {
   e.preventDefault();
   var f = e.target;
@@ -350,7 +357,7 @@ async function genPoolLink(e) {
     var data = await res.json();
     if (data.success) {
       var tokens = data.tokens || [data.token];
-      document.getElementById('poolSummary').textContent = '已生成 ' + tokens.length + ' 个分享池链接（' + hours + 'h 有效），到期：' + data.expireAt;
+      document.getElementById('poolSummary').textContent = '已生成 ' + tokens.length + ' 个共享链接（' + hours + 'h 有效），到期：' + data.expireAt;
       msg.textContent = data.message;
       msg.style.color = '#52C41A';
       var tbody = document.getElementById('poolTableBody');

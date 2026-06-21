@@ -22,7 +22,7 @@ router.get('/links', requireAuth, (req, res) => {
 
   const search = req.query.search || '';
   const status = req.query.status || '';
-  const poolType = req.query.pool || '';
+  const poolType = req.query.pool || 'pool';
 
   let sql = `
     SELECT sl.*, a.nickname as account_nickname
@@ -53,7 +53,7 @@ router.get('/links', requireAuth, (req, res) => {
   const links = db.all(sql, params);
 
   res.render('links', {
-    title: '分享链接管理',
+    title: '共享链接管理',
     adminUsername: req.session.adminUsername,
     accounts,
     links,
@@ -219,7 +219,7 @@ async function reassignPoolLinksForAccount(accountId) {
   return { reassigned, failed, details };
 }
 
-// API: 生成单个分享池链接
+// API: 生成单个共享链接
 router.post('/api/links/pool', requireAuth, async (req, res) => {
   const { expire_hours } = req.body;
   const hours = parseInt(expire_hours) || 24;
@@ -241,13 +241,13 @@ router.post('/api/links/pool', requireAuth, async (req, res) => {
 
   res.json({
     success: true,
-    message: `已生成分享池链接（账号: ${best.account.nickname}，当前负载 ${best.score} 次，${hours}h 有效）`,
+    message: `已生成共享链接（账号: ${best.account.nickname}，当前负载 ${best.score} 次，${hours}h 有效）`,
     token: { token, accountId: best.account.id, accountName: best.account.nickname, vipType: best.vipType, score: best.score },
     expireAt,
   });
 });
 
-// API: 批量生成分享池链接
+// API: 批量生成共享链接
 router.post('/api/links/batch-pool', requireAuth, async (req, res) => {
   const { expire_hours, count } = req.body;
   const hours = parseInt(expire_hours) || 24;
@@ -304,13 +304,13 @@ router.post('/api/links/batch-pool', requireAuth, async (req, res) => {
 
   res.json({
     success: true,
-    message: `已生成 ${tokens.length} 个分享池链接`,
+    message: `已生成 ${tokens.length} 个共享链接`,
     tokens,
     expireAt,
   });
 });
 
-// API: 分享池 — 自动切换链接的账号
+// API: 共享链接 — 自动切换链接的账号
 router.post('/api/links/:id/rotate-account', requireAuth, async (req, res) => {
   const { checkCookieValid } = require('../services/baidu-auth');
   const { decrypt } = require('../utils/crypto');
@@ -354,6 +354,7 @@ router.get('/api/links/export', requireAuth, (req, res) => {
   const status = req.query.status || '';
   const format = req.query.format || 'csv';
   const expireHours = parseInt(req.query.expire_hours) || 0;
+  const pool = req.query.pool || '';
 
   let sql = `
     SELECT sl.token, a.nickname, sl.is_pool, sl.first_used_at, sl.expire_hours, sl.expire_at,
@@ -376,6 +377,12 @@ router.get('/api/links/export', requireAuth, (req, res) => {
     params.push(expireHours);
   }
 
+  if (pool === 'pool') {
+    sql += ' AND sl.is_pool = 1';
+  } else if (pool === 'solo') {
+    sql += ' AND (sl.is_pool IS NULL OR sl.is_pool = 0)';
+  }
+
   sql += ' ORDER BY sl.created_at DESC';
 
   const links = db.all(sql, params);
@@ -393,7 +400,7 @@ router.get('/api/links/export', requireAuth, (req, res) => {
   const header = '链接地址,账号,类型,有效期(小时),到期时间,使用次数,最大次数,状态,创建时间';
   const rows = links.map(l => {
     const url = `https://yunpan.up.railway.app/s/${l.token}`;
-    const type = l.is_pool === 1 ? '分享池' : '独享';
+    const type = l.is_pool === 1 ? '共享' : '独享';
     const isPending = l.first_used_at === null && l.status === 'active';
     const statusMap = { active: '有效', expired: '已过期', disabled: '已停用' };
     const statusName = isPending ? '待使用' : (statusMap[l.status] || l.status);

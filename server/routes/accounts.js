@@ -443,7 +443,7 @@ router.get('/api/accounts/:id/dependent-links', requireAuth, (req, res) => {
   });
 });
 
-// API: 暂停/恢复账号（暂停后不再分配至分享池）
+// API: 暂停/恢复账号（暂停后不再分配至共享链接）
 router.post('/api/accounts/:id/toggle-pause', requireAuth, (req, res) => {
   const accountId = parseInt(req.params.id);
   const account = db.get('SELECT id, nickname, is_paused FROM accounts WHERE id = ? AND is_deleted = 0', [accountId]);
@@ -454,7 +454,7 @@ router.post('/api/accounts/:id/toggle-pause', requireAuth, (req, res) => {
   res.json({
     success: true,
     isPaused: newState === 1,
-    message: newState === 1 ? `已暂停「${account.nickname}」，分享池不再分配此账号` : `已恢复「${account.nickname}」，分享池可正常分配`,
+    message: newState === 1 ? `已暂停「${account.nickname}」，共享链接不再分配此账号` : `已恢复「${account.nickname}」，共享链接可正常分配`,
   });
 });
 
