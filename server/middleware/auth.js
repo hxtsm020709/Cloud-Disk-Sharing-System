@@ -1,3 +1,5 @@
+const config = require('../config');
+
 function requireAuth(req, res, next) {
   if (req.session && req.session.adminId) {
     return next();
@@ -5,7 +7,7 @@ function requireAuth(req, res, next) {
   if (req.path.startsWith('/api/')) {
     return res.status(401).json({ error: '请先登录' });
   }
-  res.redirect('/admin/login');
+  res.redirect('/admin' + config.loginPath);
 }
 
 function redirectIfAuth(req, res, next) {

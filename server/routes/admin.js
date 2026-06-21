@@ -17,7 +17,7 @@ function ensureAdmin() {
 }
 
 // 登录页面
-router.get('/login', redirectIfAuth, (req, res) => {
+router.get(config.loginPath, redirectIfAuth, (req, res) => {
   res.render('login', {
     title: '管理员登录',
     error: null,
@@ -26,7 +26,7 @@ router.get('/login', redirectIfAuth, (req, res) => {
 });
 
 // 处理登录
-router.post('/login', redirectIfAuth, (req, res) => {
+router.post(config.loginPath, redirectIfAuth, (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
@@ -63,7 +63,7 @@ router.post('/login', redirectIfAuth, (req, res) => {
 // 退出登录
 router.get('/logout', (req, res) => {
   req.session.destroy(() => {
-    res.redirect('/admin/login');
+    res.redirect('/admin' + config.loginPath);
   });
 });
 
