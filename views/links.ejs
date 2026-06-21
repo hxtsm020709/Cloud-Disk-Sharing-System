@@ -88,7 +88,7 @@
       <option value="all" <%= (typeof status === 'undefined' || status === 'all') ? 'selected' : '' %>>全部状态</option>
       <option value="active" <%= status === 'active' ? 'selected' : '' %>>有效</option>
       <option value="expired" <%= status === 'expired' ? 'selected' : '' %>>已过期</option>
-      <option value="disabled" <%= status === 'disabled' ? 'selected' : '' %>>已停用</option>
+      <option value="disabled" <%= status === 'disabled' ? 'selected' : '' %>>未启用</option>
     </select>
     <select name="pool" class="form-control" style="max-width: 120px;">
       <option value="" <%= (typeof poolType === 'undefined' || poolType === '') ? 'selected' : '' %>>全部类型</option>
@@ -102,15 +102,23 @@
   </form>
 
   <% if (links.length > 0) { %>
-  <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
+  <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
     <input type="checkbox" id="selectAllCheckbox" onclick="toggleSelectAll(this)" title="全选/取消全选">
     <button class="btn btn-sm btn-secondary" onclick="selectAll()">全选</button>
     <button class="btn btn-sm btn-secondary" onclick="clearSelection()">取消全选</button>
-    <span style="flex:1;"></span>
+    <span style="flex:1; min-width: 0;"></span>
     <span id="selectedCount" style="font-size: 13px; color: #999;"></span>
     <button class="btn btn-sm btn-danger" onclick="batchDisable()">批量停用</button>
     <button class="btn btn-sm btn-danger" onclick="batchDelete()">批量删除</button>
     <button class="btn btn-sm btn-danger" onclick="deleteAllDisabled()">删除所有已停用/过期</button>
+    <span style="width: 1px; background: #ddd; height: 24px; margin: 0 4px;"></span>
+    <select id="exportStatus" class="form-control" style="max-width: 100px;">
+      <option value="all">全部状态</option>
+      <option value="active">有效</option>
+      <option value="expired">已过期</option>
+      <option value="disabled">未启用</option>
+    </select>
+    <button class="btn btn-sm btn-primary" onclick="exportLinks()">导出 CSV</button>
   </div>
   <% } %>
   <% if (links.length === 0) { %>
@@ -300,6 +308,14 @@ async function batchDelete() {
   } else {
     alert(data.message);
   }
+}
+
+// === 导出功能 ===
+function exportLinks() {
+  var status = document.getElementById('exportStatus').value;
+  var url = '/admin/api/links/export';
+  if (status) url += '?status=' + status;
+  window.location.href = url;
 }
 
 // ======== 生成分享池链接 ========

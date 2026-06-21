@@ -364,6 +364,47 @@ router.post('/api/links/:id/rotate-account', requireAuth, async (req, res) => {
   res.json({ success: false, message: '没有其他可用账号，所有 Cookie 均已失效' });
 });
 
+// API: 导出链接为 CSV
+router.get('/api/links/export', requireAuth, (req, res) => {
+  const status = req.query.status || '';
+
+  let sql = `
+    SELECT sl.token, a.nickname, sl.is_pool, sl.expire_hours, sl.expire_at,
+           sl.use_count, sl.max_uses, sl.status, sl.created_at
+    FROM share_links sl
+    LEFT JOIN accounts a ON sl.account_id = a.id
+    WHERE 1=1
+  `;
+  const params = [];
+
+  if (status && status !== 'all') {
+    sql += ' AND sl.status = ?';
+    params.push(status);
+  }
+
+  sql += ' ORDER BY sl.created_at DESC';
+
+  const links = db.all(sql, params);
+
+  const BOM = '﻿';
+  const header = '链接地址,账号,类型,有效期(小时),到期时间,使用次数,最大次数,状态,创建时间';
+  const rows = links.map(l => {
+    const url = `https://yunpan.up.railway.app/s/${l.token}`;
+    const type = l.is_pool === 1 ? '分享池' : '独享';
+    const statusMap = { active: '有效', expired: '已过期', disabled: '已停用' };
+    const statusName = statusMap[l.status] || l.status;
+    return [url, l.nickname || '', type, l.expire_hours, l.expire_at || '', l.use_count, l.max_uses || 20, statusName, l.created_at || '']
+      .map(v => '"' + String(v).replace(/"/g, '""') + '"')
+      .join(',');
+  });
+
+  const csv = BOM + header + '\n' + rows.join('\n');
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="links_export_${Date.now()}.csv"`);
+  res.send(csv);
+});
+
 // API: 账号池统计（仪表盘用）
 router.get('/api/links/pool-stats', requireAuth, async (req, res) => {
   const accounts = db.all('SELECT id, nickname, vip_type, cookie_status FROM accounts WHERE is_deleted = 0 ORDER BY nickname');
