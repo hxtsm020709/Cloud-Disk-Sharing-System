@@ -253,40 +253,51 @@ router.post('/api/links/batch-pool', requireAuth, async (req, res) => {
   const hours = parseInt(expire_hours) || 24;
   const batchCount = Math.min(parseInt(count) || 1, 50);
 
+  // 一次性预验证所有账号，避免循环内重复 HTTP 请求
+  const { checkCookieValid } = require('../services/baidu-auth');
+  const { decrypt } = require('../utils/crypto');
+  const allAccounts = db.all('SELECT * FROM accounts WHERE is_deleted = 0 AND is_paused = 0');
+  const validAccounts = [];
+  for (const acc of allAccounts) {
+    try {
+      const cookie = decrypt(acc.cookie_encrypted);
+      const check = await checkCookieValid(cookie);
+      if (check.valid) {
+        db.run(
+          `UPDATE accounts SET cookie_status='valid', vip_type=?, cookie_updated_at=datetime('now','localtime') WHERE id=?`,
+          [check.vipType || acc.vip_type, acc.id]
+        );
+        validAccounts.push({ account: acc, vipType: check.vipType, score: getAccountUsageScore(acc.id) });
+      } else {
+        db.run(
+          `UPDATE accounts SET cookie_status='expired', cookie_updated_at=datetime('now','localtime') WHERE id=?`,
+          [acc.id]
+        );
+      }
+    } catch(e) {}
+  }
+
+  if (validAccounts.length === 0) {
+    return res.json({ success: false, message: '没有可用的有效账号' });
+  }
+
   const d = new Date(Date.now() + hours * 3600000);
   const pad = n => String(n).padStart(2, '0');
   const expireAt = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
   const tokens = [];
-  const usedScores = {};
+  const usedScores = {}; // 本次批量内的临时负载
 
   for (let i = 0; i < batchCount; i++) {
-    let best = await pickLeastUsedAccount([]);
-    if (best) {
-      const tempScore = usedScores[best.account.id] || 0;
-      best.score = best.score + tempScore;
-      if (tempScore > 0) {
-        const allAccounts = db.all('SELECT * FROM accounts WHERE is_deleted = 0 AND is_paused = 0');
-        let bestAcc = null;
-        let bestBalancedScore = Infinity;
-        const { checkCookieValid } = require('../services/baidu-auth');
-        const { decrypt } = require('../utils/crypto');
-        for (const acc of allAccounts) {
-          try {
-            const cookie = decrypt(acc.cookie_encrypted);
-            const check = await checkCookieValid(cookie);
-            if (check.valid) {
-              const baseScore = getAccountUsageScore(acc.id);
-              const temp = usedScores[acc.id] || 0;
-              const balanced = baseScore + temp;
-              if (balanced < bestBalancedScore) {
-                bestBalancedScore = balanced;
-                bestAcc = { account: acc, vipType: check.vipType, score: baseScore };
-              }
-            }
-          } catch(e) {}
-        }
-        if (bestAcc) best = bestAcc;
+    // 本地计算：基础负载 + 本次批量内临时负载，选最低的
+    let best = null;
+    let bestScore = Infinity;
+    for (const entry of validAccounts) {
+      const temp = usedScores[entry.account.id] || 0;
+      const balanced = entry.score + temp;
+      if (balanced < bestScore) {
+        bestScore = balanced;
+        best = entry;
       }
     }
 
