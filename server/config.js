@@ -7,6 +7,6 @@ module.exports = {
   encryptionKey: process.env.ENCRYPTION_KEY || 'fallback_key_32bytes_long!!',
   adminUser: process.env.ADMIN_USERNAME || 'admin',
   adminPass: process.env.ADMIN_PASSWORD || 'admin123',
-  loginPath: process.env.LOGIN_PATH || '/sys-login',
+  loginPath: process.env.LOGIN_PATH || '/yunpanadmin',
   dbPath: process.env.DB_PATH || './data/database.sqlite',
 };
