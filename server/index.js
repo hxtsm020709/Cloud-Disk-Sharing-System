@@ -244,9 +244,9 @@ async function start() {
     res.json(result);
   });
 
-  // 根路径重定向
+  // 首页（用户侧默认页面）
   app.get('/', (req, res) => {
-    res.redirect('/admin/dashboard');
+    res.render('home', { layout: false });
   });
 
   // 获取本机局域网 IP
