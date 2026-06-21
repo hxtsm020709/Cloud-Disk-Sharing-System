@@ -279,6 +279,20 @@ async function start() {
       [link.id, account.id, result.success ? 'login_success' : 'login_fail', req.ip, req.get('user-agent') || '', result.message]
     );
 
+    // 将技术错误转为用户友好提示
+    if (!result.success && result.message) {
+      const raw = result.message;
+      if (result.errno === 400023) {
+        result.message = '账号需要安全验证，请联系管理员更新Cookie';
+      } else if (raw.includes('Cookie已失效') || raw.includes('Cookie 已失效')) {
+        result.message = '账号登录已失效，请联系管理员';
+      } else if (raw.includes('二维码已过期')) {
+        result.message = '二维码已过期，请刷新PC端百度网盘重新扫码';
+      } else if (raw.includes('errno=')) {
+        result.message = '登录失败，请联系管理员处理';
+      }
+    }
+
     res.json(result);
   });
 
