@@ -8,14 +8,14 @@
 </head>
 <body class="login-page">
   <div class="login-box">
-    <h1>网盘会员管理</h1>
-    <p class="subtitle">网盘会员账号共享平台</p>
+    <h1>网盘共享系统</h1>
+    <p class="subtitle">管理后台</p>
 
     <% if (error) { %>
       <div class="alert alert-danger"><%= error %></div>
     <% } %>
 
-    <form method="POST" action="/admin/login">
+    <form method="POST" action="/admin<%= loginPath %>">
       <div class="form-group">
         <label>用户名</label>
         <input type="text" name="username" class="form-control" placeholder="请输入用户名" required autofocus>

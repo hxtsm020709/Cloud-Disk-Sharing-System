@@ -22,6 +22,7 @@ router.get(config.loginPath, redirectIfAuth, (req, res) => {
     title: '管理员登录',
     error: null,
     layout: false,
+    loginPath: config.loginPath,
   });
 });
 
@@ -34,6 +35,7 @@ router.post(config.loginPath, redirectIfAuth, (req, res) => {
       title: '管理员登录',
       error: '请输入用户名和密码',
       layout: false,
+      loginPath: config.loginPath,
     });
   }
 
@@ -43,6 +45,7 @@ router.post(config.loginPath, redirectIfAuth, (req, res) => {
       title: '管理员登录',
       error: '用户名或密码错误',
       layout: false,
+      loginPath: config.loginPath,
     });
   }
 
@@ -52,6 +55,7 @@ router.post(config.loginPath, redirectIfAuth, (req, res) => {
       title: '管理员登录',
       error: '用户名或密码错误',
       layout: false,
+      loginPath: config.loginPath,
     });
   }
 
