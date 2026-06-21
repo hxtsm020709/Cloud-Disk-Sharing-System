@@ -443,19 +443,30 @@ router.get('/api/accounts/:id/dependent-links', requireAuth, (req, res) => {
   });
 });
 
-// API: 暂停/恢复账号（暂停后不再分配至共享链接）
-router.post('/api/accounts/:id/toggle-pause', requireAuth, (req, res) => {
+// API: 暂停/恢复账号（暂停后不再分配至共享链接，并自动切换关联的共享链接）
+router.post('/api/accounts/:id/toggle-pause', requireAuth, async (req, res) => {
   const accountId = parseInt(req.params.id);
   const account = db.get('SELECT id, nickname, is_paused FROM accounts WHERE id = ? AND is_deleted = 0', [accountId]);
   if (!account) return res.json({ success: false, message: '账号不存在' });
 
   const newState = account.is_paused ? 0 : 1;
   db.run('UPDATE accounts SET is_paused = ?, updated_at = datetime(\'now\', \'localtime\') WHERE id = ?', [newState, accountId]);
-  res.json({
-    success: true,
-    isPaused: newState === 1,
-    message: newState === 1 ? `已暂停「${account.nickname}」，共享链接不再分配此账号` : `已恢复「${account.nickname}」，共享链接可正常分配`,
-  });
+
+  let msg = newState === 1 ? `已暂停「${account.nickname}」，共享链接不再分配此账号` : `已恢复「${account.nickname}」，共享链接可正常分配`;
+
+  // 暂停时自动将关联的共享链接切换到其他可用账号
+  if (newState === 1) {
+    const { reassignPoolLinksForAccount } = require('./links');
+    const reassignResult = await reassignPoolLinksForAccount(accountId);
+    if (reassignResult.reassigned > 0) {
+      msg += `，${reassignResult.reassigned} 个关联共享链接已自动切换`;
+    }
+    if (reassignResult.failed > 0) {
+      msg += `，${reassignResult.failed} 个链接无可用账号可切换`;
+    }
+  }
+
+  res.json({ success: true, isPaused: newState === 1, message: msg });
 });
 
 // API: 检测单个账号 Cookie 有效性（即详情页的"抓取账号信息"）
