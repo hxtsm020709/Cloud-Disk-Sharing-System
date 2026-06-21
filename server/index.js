@@ -316,7 +316,7 @@ async function start() {
     https.createServer(httpsOptions, app).listen(httpsPort, config.host, () => {
       console.log(`HTTPS 服务器: https://localhost:${httpsPort}`);
       if (lanIP !== '127.0.0.1') {
-        console.log(`管理后台: https://${lanIP}:${httpsPort}/admin` + config.loginPath);
+        console.log(`管理后台: https://${lanIP}:${httpsPort}` + config.loginPath);
         console.log(`员工扫码: https://${lanIP}:${httpsPort}/s/<token>`);
       }
     });
@@ -325,7 +325,7 @@ async function start() {
   http.createServer(app).listen(config.port, config.host, () => {
     const host = config.host === '0.0.0.0' ? 'localhost' : config.host;
     console.log(`服务已启动: http://${host}:${config.port}`);
-    console.log(`管理后台: http://${host}:${config.port}/admin` + config.loginPath);
+    console.log(`管理后台: http://${host}:${config.port}` + config.loginPath);
   });
 }
 
