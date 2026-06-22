@@ -339,9 +339,10 @@ async function confirmQRLogin(qrContent, cookieText, _depth = 0) {
       const v = urlObj.searchParams.get(key);
       if (v) qrParams[key] = v;
     }
-    if (urlObj.hostname === 'wappass.baidu.com' && urlObj.pathname === '/wp/') {
-      confirmPageUrl = trimmed;
-    }
+    // 不直接用QR原始URL（含qrloginfrom=native会导致返回native页面），去除此参数重建
+    // if (urlObj.hostname === 'wappass.baidu.com' && urlObj.pathname === '/wp/') {
+    //   confirmPageUrl = trimmed;
+    // }
   } catch {
     const signMatch = qrContent.match(/sign=([^&]+)/);
     if (signMatch) sign = signMatch[1];
