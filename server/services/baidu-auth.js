@@ -402,8 +402,15 @@ async function confirmQRLogin(qrContent, cookieText) {
       if (/已过期|已失效|已超时|expired|timeout/i.test(pageHtml)) {
         return { success: false, qrExpired: true, message: '二维码已过期', requests: requestsLog.join('\n') };
       }
-      // 无token（native app二维码），跳过页面直接POST确认
-      requestsLog.push('No token (native QR), trying direct POST with sign only');
+      // 无token（native app二维码）— 尝试提取页面中内嵌的base64二维码
+      const qrImgMatch = pageHtml.match(/data:image\/png;base64,([A-Za-z0-9+/=]+)/);
+      if (qrImgMatch) {
+        const innerQrB64 = qrImgMatch[0]; // 完整 data:image/png;base64,...
+        requestsLog.push('Step1: 提取到内嵌二维码图片(' + (qrImgMatch[1].length) + 'B)，返回前端解码');
+        return { success: false, qrExpired: true, innerQr: innerQrB64, message: '请解码内嵌二维码', requests: requestsLog.join('\n') };
+      }
+      requestsLog.push('Step1: 未找到内嵌二维码，尝试空token直接POST');
+      // 回退：无token直接POST
     }
 
   } catch (e) {

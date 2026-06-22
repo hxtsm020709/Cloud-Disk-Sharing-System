@@ -234,6 +234,13 @@ async function start() {
 
     let result = await confirmQRLogin(qrContent, cookieText);
 
+    // 如果返回了内嵌二维码(native app)，传给前端解码后重新确认
+    if (result.innerQr) {
+      result.maxUses = maxUses;
+      result.remainingUses = Math.max(0, maxUses - link.use_count);
+      return res.json(result);
+    }
+
     if (!result.success) {
       console.log('[confirm] FAILED for account:', account.nickname);
       console.log('[confirm]', (result.requests || '').split('\n').join('\n[confirm] '));
