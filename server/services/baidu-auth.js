@@ -353,12 +353,15 @@ async function confirmQRLogin(qrContent, cookieText, _depth = 0) {
       const v = urlObj.searchParams.get(key);
       if (v) qrParams[key] = v;
     }
-    // 用QR原始URL但去掉qrloginfrom和adapter（否则Baidu返回native扫码页而非token页面）
+    // 用QR原始URL但去掉qrloginfrom=native（否则Baidu返回扫码页而非token页面）
     if (urlObj.hostname === 'wappass.baidu.com' && urlObj.pathname === '/wp/') {
-      const cleaned = new URL(trimmed);
-      cleaned.searchParams.delete('qrloginfrom');
-      cleaned.searchParams.delete('adapter');
-      confirmPageUrl = cleaned.toString();
+      if (urlObj.searchParams.get('qrloginfrom') === 'native') {
+        const cleaned = new URL(trimmed);
+        cleaned.searchParams.delete('qrloginfrom');
+        confirmPageUrl = cleaned.toString();
+      } else {
+        confirmPageUrl = trimmed;
+      }
     }
   } catch {
     const signMatch = qrContent.match(/sign=([^&]+)/);
