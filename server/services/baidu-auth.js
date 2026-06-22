@@ -418,9 +418,13 @@ async function confirmQRLogin(qrContent, cookieText) {
     return { success: false, message: '访问确认页面失败', requests: requestsLog.join('\n') };
   }
 
-  // 无token也继续Step2（手机端可能不需要提取token）
+  // Step 1 未提取到 token — 手机端页面是 JS 动态渲染，返回页面HTML供调试
   if (!pageToken) {
-    requestsLog.push('Step1 无token，尝试直接POST确认');
+    requestsLog.push('=== 页面HTML首部 ===');
+    requestsLog.push(pageHtml.slice(0, 500));
+    requestsLog.push('=== 页面HTML尾部 ===');
+    requestsLog.push(pageHtml.slice(-500));
+    return { success: false, qrExpired: true, message: '手机端扫码尚不支持，请使用PC端百度网盘二维码登录', requests: requestsLog.join('\n') };
   }
 
   // ====== Step 2: POST 确认登录（VIP Cookie + 会话 Cookie 合并回传） ======
