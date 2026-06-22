@@ -20,8 +20,8 @@
     "express-ejs-layouts": "^2.5.1",
     "express-session": "^1.19.0",
     "jimp": "^1.6.1",
+    "jsqr": "^1.4.0",
     "node-cron": "^4.2.1",
-    "qrcode-reader": "^1.0.4",
     "sql.js": "^1.14.1"
   },
   "devDependencies": {

@@ -1,30 +1,38 @@
 const axios = require('axios');
 const https = require('https');
 
-// 服务端解码base64图片中的二维码
+// 服务端解码base64图片中的二维码（使用jsQR，兼容Node.js）
 async function decodeQRFromBase64(dataUrl) {
   try {
     const Jimp = require('jimp');
-    const QrCode = require('qrcode-reader');
+    const jsQR = require('jsqr');
     const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
     const image = await Jimp.read(buffer);
-    // 转灰度提高识别率
     image.grayscale();
 
-    return new Promise((resolve, reject) => {
-      const qr = new QrCode();
-      qr.callback = function(err, result) {
-        if (err) { console.log('[qr-decode] error:', err.message); return resolve(null); }
-        console.log('[qr-decode] success:', (result.result || '').slice(0, 80));
-        resolve(result ? result.result : null);
-      };
-      qr.decode({
-        width: image.bitmap.width,
-        height: image.bitmap.height,
-        data: new Uint8ClampedArray(image.bitmap.data),
-      });
-    });
+    const w = image.bitmap.width;
+    const h = image.bitmap.height;
+    const rgba = new Uint8ClampedArray(image.bitmap.data);
+    const code = jsQR(rgba, w, h, { inversionAttempts: 'attemptBoth' });
+
+    if (code) {
+      console.log('[qr-decode] jsQR success:', code.data.slice(0, 80));
+      return code.data;
+    }
+    // 尝试缩放到500px以内
+    if (w > 500 || h > 500) {
+      const scale = Math.min(500 / w, 500 / h);
+      image.resize(Math.floor(w * scale), Math.floor(h * scale));
+      const r2 = new Uint8ClampedArray(image.bitmap.data);
+      const code2 = jsQR(r2, image.bitmap.width, image.bitmap.height, { inversionAttempts: 'attemptBoth' });
+      if (code2) {
+        console.log('[qr-decode] jsQR success (scaled):', code2.data.slice(0, 80));
+        return code2.data;
+      }
+    }
+    console.log('[qr-decode] jsQR no QR found in', w + 'x' + h, 'image');
+    return null;
   } catch(e) {
     console.log('[qr-decode] exception:', e.message);
     return null;
