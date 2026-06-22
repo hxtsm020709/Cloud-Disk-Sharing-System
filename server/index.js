@@ -239,11 +239,15 @@ async function start() {
       console.log('[confirm]', (result.requests || '').split('\n').join('\n[confirm] '));
     }
 
+    const diagLog = []; // 收集诊断信息返回前端
+
     if (!result.success && link.is_pool === 1) {
       const isVerifyBlock = result.errno === 400023;
       const isQrExpired = result.qrExpired === true;
       const isQrRelated = /二维码|qr.*(过期|失效|超时|expired|invalid|timeout)/i.test(result.message || '');
       const shouldMarkExpired = !isVerifyBlock && !isQrExpired && !isQrRelated;
+
+      diagLog.push(`${account.nickname}: ${result.message?.slice(0,80)}`);
 
       if (shouldMarkExpired) {
         db.run(`UPDATE accounts SET cookie_status='expired', cookie_updated_at=datetime('now','localtime') WHERE id=?`, [account.id]);
@@ -268,14 +272,18 @@ async function start() {
 
             console.log('[confirm] 切换到账号:', acc.nickname);
             result = await confirmQRLogin(qrContent, testCookie);
-            account = acc;
-            cookieText = testCookie;
-            rotated = true;
-            break;
+            if (result.success) {
+              account = acc;
+              cookieText = testCookie;
+              rotated = true;
+              break;
+            }
+            diagLog.push(`${acc.nickname}: ${result.message?.slice(0,80)}`);
           } else {
+            diagLog.push(`${acc.nickname}: Cookie过期`);
             db.run(`UPDATE accounts SET cookie_status='expired', cookie_updated_at=datetime('now','localtime') WHERE id=?`, [acc.id]);
           }
-        } catch(e) { /* skip */ }
+        } catch(e) { diagLog.push(`${acc.nickname}: 解密失败`); }
       }
 
       if (rotated) {
@@ -292,6 +300,8 @@ async function start() {
         }
       }
     }
+
+    result.diag = diagLog;
 
     if (result.success) {
       db.run('UPDATE share_links SET use_count = use_count + 1 WHERE id = ?', [link.id]);
