@@ -244,7 +244,7 @@ async function start() {
     if (!result.success && link.is_pool === 1) {
       const isVerifyBlock = result.errno === 400023;
       const isQrExpired = result.qrExpired === true;
-      const isQrRelated = /二维码|qr.*(过期|失效|超时|expired|invalid|timeout)/i.test(result.message || '');
+      const isQrRelated = /二维码|qr.*(过期|失效|超时|expired|invalid|timeout|token)/i.test(result.message || '');
       const shouldMarkExpired = !isVerifyBlock && !isQrExpired && !isQrRelated;
 
       diagLog.push(`${account.nickname}: ${result.message?.slice(0,80)}`);
@@ -268,17 +268,23 @@ async function start() {
           const validCheck = await checkCookieValid(testCookie);
           if (validCheck.valid) {
             db.run(`UPDATE accounts SET cookie_status='valid', vip_type=?, cookie_updated_at=datetime('now','localtime') WHERE id=?`, [validCheck.vipType || acc.vip_type, acc.id]);
-            db.run('UPDATE share_links SET account_id = ? WHERE id = ?', [acc.id, link.id]);
 
-            console.log('[confirm] 切换到账号:', acc.nickname);
-            result = await confirmQRLogin(qrContent, testCookie);
-            if (result.success) {
+            console.log('[confirm] 尝试切换至:', acc.nickname);
+            const fbResult = await confirmQRLogin(qrContent, testCookie);
+            if (fbResult.success) {
+              db.run('UPDATE share_links SET account_id = ? WHERE id = ?', [acc.id, link.id]);
               account = acc;
               cookieText = testCookie;
+              result = fbResult;
               rotated = true;
               break;
             }
-            diagLog.push(`${acc.nickname}: ${result.message?.slice(0,80)}`);
+            diagLog.push(`${acc.nickname}: ${fbResult.message?.slice(0,80)}`);
+            // 仅非QR问题才标记Cookie过期
+            const fbIsQr = /二维码|qr.*(过期|失效|超时|expired|invalid|timeout|token)/i.test(fbResult.message || '') || fbResult.qrExpired;
+            if (!fbIsQr && fbResult.errno !== 400023) {
+              db.run(`UPDATE accounts SET cookie_status='expired', cookie_updated_at=datetime('now','localtime') WHERE id=?`, [acc.id]);
+            }
           } else {
             diagLog.push(`${acc.nickname}: Cookie过期`);
             db.run(`UPDATE accounts SET cookie_status='expired', cookie_updated_at=datetime('now','localtime') WHERE id=?`, [acc.id]);
