@@ -85,7 +85,7 @@ async function start() {
   app.use('/admin', links.router);
 
   // 分享链接 — 扫码登录页
-  app.get('/s/:token', (req, res) => {
+  app.get('/s/:token', async (req, res) => {
     const db = require('./database');
     let link = db.get("SELECT * FROM share_links WHERE token = ?", [req.params.token]);
     if (!link) {
