@@ -1,6 +1,36 @@
 const axios = require('axios');
 const https = require('https');
 
+// 服务端解码base64图片中的二维码
+async function decodeQRFromBase64(dataUrl) {
+  try {
+    const Jimp = require('jimp');
+    const QrCode = require('qrcode-reader');
+    const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    const image = await Jimp.read(buffer);
+    // 转灰度提高识别率
+    image.grayscale().contrast(0.5);
+
+    return new Promise((resolve, reject) => {
+      const qr = new QrCode();
+      qr.callback = function(err, result) {
+        if (err) { console.log('[qr-decode] error:', err.message); return resolve(null); }
+        console.log('[qr-decode] success:', (result.result || '').slice(0, 80));
+        resolve(result ? result.result : null);
+      };
+      qr.decode({
+        width: image.bitmap.width,
+        height: image.bitmap.height,
+        data: new Uint8ClampedArray(image.bitmap.data),
+      });
+    });
+  } catch(e) {
+    console.log('[qr-decode] exception:', e.message);
+    return null;
+  }
+}
+
 // 模拟真实浏览器的请求实例
 const client = axios.create({
   timeout: 15000,
@@ -251,7 +281,8 @@ function parseQRSign(qrContent) {
  * 关键：Step1 GET 返回的 Set-Cookie（会话 Cookie）必须在 Step2 POST 中回传，
  * 否则百度会因缺少会话凭证而触发 400023（需要验证后登录）。
  */
-async function confirmQRLogin(qrContent, cookieText) {
+async function confirmQRLogin(qrContent, cookieText, _depth = 0) {
+  if (_depth > 2) return { success: false, message: '二维码嵌套过深，请使用PC端百度网盘二维码', requests: '' };
   const mobileUA = 'Mozilla/5.0 (Linux; Android 13; SM-S9080) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
   const baiduAppUA = 'Mozilla/5.0 (Linux; Android 13; SM-S9080) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 baiduboxapp/15.2.5';
   const desktopUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -402,14 +433,20 @@ async function confirmQRLogin(qrContent, cookieText) {
       if (/已过期|已失效|已超时|expired|timeout/i.test(pageHtml)) {
         return { success: false, qrExpired: true, message: '二维码已过期', requests: requestsLog.join('\n') };
       }
-      // 无token（native app二维码）— 尝试提取页面中内嵌的base64二维码
+      // 无token（native app二维码）— 尝试提取页面中内嵌的base64二维码并解码
       const qrImgMatch = pageHtml.match(/data:image\/png;base64,([A-Za-z0-9+/=]+)/);
       if (qrImgMatch) {
-        const innerQrB64 = qrImgMatch[0]; // 完整 data:image/png;base64,...
-        const b64Len = qrImgMatch[1].length;
-        requestsLog.push('Step1: 提取到内嵌二维码base64(' + b64Len + 'B)');
-        console.log('[confirmQRLogin] Extracted inner QR base64, length=' + b64Len);
-        return { success: false, qrExpired: true, innerQr: innerQrB64, message: '内嵌二维码(' + b64Len + 'B)', requests: requestsLog.join('\n') };
+        const innerQrB64 = qrImgMatch[0];
+        requestsLog.push('Step1: 提取到内嵌二维码base64(' + qrImgMatch[1].length + 'B)，服务端解码');
+        const decodedUrl = await decodeQRFromBase64(innerQrB64);
+        if (decodedUrl) {
+          requestsLog.push('Step1: 内嵌二维码解码成功: ' + decodedUrl.slice(0, 80));
+          // 用解码出的URL重新走确认流程
+          console.log('[confirmQRLogin] Inner QR decoded, recursing with:', decodedUrl.slice(0, 80));
+          return await confirmQRLogin(decodedUrl, cookieText, _depth + 1);
+        }
+        requestsLog.push('Step1: 内嵌二维码解码失败');
+        return { success: false, qrExpired: true, innerQr: innerQrB64, message: '内嵌二维码解码失败', requests: requestsLog.join('\n') };
       }
       requestsLog.push('Step1: 未找到内嵌base64二维码图片');
       // 回退：无token直接POST
