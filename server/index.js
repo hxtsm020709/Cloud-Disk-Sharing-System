@@ -223,9 +223,13 @@ async function start() {
         db.run(`UPDATE accounts SET cookie_status='expired', cookie_updated_at=datetime('now','localtime') WHERE id=?`, [account.id]);
       }
 
-      console.log(`[confirm] 登录失败${isVerifyBlock ? '(验证拦截)' : isQrExpired ? '(QR过期)' : isQrRelated ? '(QR问题)' : ''}，尝试切换备用账号...`);
+      console.log(`[confirm] 登录失败${isVerifyBlock ? '(验证拦截)' : isQrExpired ? '(QR过期)' : isQrRelated ? '(QR问题)' : ''}，尝试切换SVIP备用账号...`);
 
       const allAccounts = db.all('SELECT * FROM accounts WHERE is_deleted = 0 AND is_paused = 0 AND id != ?', [link.account_id]);
+      // SVIP > VIP > 普通 优先排序
+      const vipRank = { 'svip': 0, 'vip': 1, 'normal': 2 };
+      allAccounts.sort((a, b) => (vipRank[a.vip_type] ?? 3) - (vipRank[b.vip_type] ?? 3));
+
       let rotated = false;
 
       for (const acc of allAccounts) {
@@ -252,12 +256,13 @@ async function start() {
         result.rotated = true;
         result.rotatedTo = account.nickname;
       } else if (!result.success) {
+        result.fallbackExhausted = true;
         if (isQrExpired || isQrRelated) {
           result.message = '二维码已过期，请刷新PC端百度网盘登录页面获取新二维码后重新扫码';
         } else if (isVerifyBlock) {
-          result.message = '所有账号均触发安全验证，请在常用网络环境下重新获取 Cookie';
+          result.message = '系统维护中，请稍后再试。如多次出现请于产品购买处联系客服处理。';
         } else {
-          result.message = '所有可用账号均已失效，请联系管理员更新 Cookie';
+          result.message = '服务暂时不可用，请于产品购买处联系客服处理。';
         }
       }
     }
@@ -276,8 +281,8 @@ async function start() {
       [link.id, account.id, result.success ? 'login_success' : 'login_fail', req.ip, req.get('user-agent') || '', result.message]
     );
 
-    // 将技术错误转为用户友好提示
-    if (!result.success && result.message) {
+    // 将技术错误转为用户友好提示（备用切换已处理过的错误不再覆盖）
+    if (!result.success && result.message && !result.fallbackExhausted) {
       const raw = result.message;
       if (result.errno === 400023) {
         result.message = '账号需要安全验证，请联系管理员更新Cookie';
@@ -286,7 +291,7 @@ async function start() {
       } else if (raw.includes('二维码已过期')) {
         result.message = '二维码已过期，请刷新PC端百度网盘重新扫码';
       } else if (raw.includes('errno=')) {
-        result.message = '登录失败，请联系管理员处理';
+        result.message = '登录失败，请于产品购买处联系客服处理。';
       }
     }
 

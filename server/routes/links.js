@@ -171,8 +171,10 @@ async function pickLeastUsedAccount(excludeAccountIds = []) {
 
   const allAccounts = db.all('SELECT * FROM accounts WHERE is_deleted = 0 AND is_paused = 0');
   const excludeSet = new Set(excludeAccountIds);
+  const vipRank = { 'svip': 0, 'vip': 1, 'normal': 2 };
   let best = null;
   let bestScore = Infinity;
+  let bestRank = 999;
 
   for (const acc of allAccounts) {
     if (excludeSet.has(acc.id)) continue;
@@ -180,14 +182,18 @@ async function pickLeastUsedAccount(excludeAccountIds = []) {
       const cookie = decrypt(acc.cookie_encrypted);
       const check = await checkCookieValid(cookie);
       if (check.valid) {
+        const vip = check.vipType || acc.vip_type;
         db.run(
           `UPDATE accounts SET cookie_status='valid', vip_type=?, cookie_updated_at=datetime('now','localtime') WHERE id=?`,
-          [check.vipType || acc.vip_type, acc.id]
+          [vip, acc.id]
         );
+        const rank = vipRank[vip] ?? 3;
         const score = getAccountUsageScore(acc.id);
-        if (score < bestScore) {
+        // SVIP优先，同等级内选负载最低
+        if (rank < bestRank || (rank === bestRank && score < bestScore)) {
+          bestRank = rank;
           bestScore = score;
-          best = { account: acc, vipType: check.vipType, score };
+          best = { account: acc, vipType: vip, score };
         }
       } else {
         db.run(
