@@ -406,10 +406,12 @@ async function confirmQRLogin(qrContent, cookieText) {
       const qrImgMatch = pageHtml.match(/data:image\/png;base64,([A-Za-z0-9+/=]+)/);
       if (qrImgMatch) {
         const innerQrB64 = qrImgMatch[0]; // 完整 data:image/png;base64,...
-        requestsLog.push('Step1: 提取到内嵌二维码图片(' + (qrImgMatch[1].length) + 'B)，返回前端解码');
-        return { success: false, qrExpired: true, innerQr: innerQrB64, message: '请解码内嵌二维码', requests: requestsLog.join('\n') };
+        const b64Len = qrImgMatch[1].length;
+        requestsLog.push('Step1: 提取到内嵌二维码base64(' + b64Len + 'B)');
+        console.log('[confirmQRLogin] Extracted inner QR base64, length=' + b64Len);
+        return { success: false, qrExpired: true, innerQr: innerQrB64, message: '内嵌二维码(' + b64Len + 'B)', requests: requestsLog.join('\n') };
       }
-      requestsLog.push('Step1: 未找到内嵌二维码，尝试空token直接POST');
+      requestsLog.push('Step1: 未找到内嵌base64二维码图片');
       // 回退：无token直接POST
     }
 

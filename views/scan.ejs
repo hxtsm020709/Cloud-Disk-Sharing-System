@@ -708,15 +708,15 @@ async function doConfirm() {
 
     // 内嵌二维码（native app）→ 前端解码后重新确认
     if (data.innerQr) {
-      document.getElementById('scannerStatus').innerHTML = '<span style="color:#FAAD14;">正在解码内嵌二维码...</span>';
+      document.getElementById('scannerStatus').innerHTML = '<span style="color:#FAAD14;">正在解码内嵌二维码...（图片大小=' + data.innerQr.length + 'B）</span>';
       var innerContent = await decodeBase64Qr(data.innerQr);
       if (innerContent) {
         capturedQR = innerContent;
-        document.getElementById('scannerStatus').innerHTML = '<span style="color:#FAAD14;">已解码内嵌QR，正在确认登录...</span>';
+        document.getElementById('scannerStatus').innerHTML = '<span style="color:#FAAD14;">已解码内嵌QR内容: ' + innerContent.slice(0, 80) + '...，正在确认登录</span>';
         await doConfirm();
         return;
       }
-      document.getElementById('scannerStatus').innerHTML = '<span style="color:#FF4D4F;">内嵌二维码解码失败，请使用PC端百度网盘二维码</span>';
+      document.getElementById('scannerStatus').innerHTML = '<span style="color:#FF4D4F;">内嵌二维码解码失败（图片数据长度=' + (data.innerQr ? data.innerQr.length : 0) + '），请使用PC端百度网盘二维码</span>';
       document.getElementById('scannerActions').innerHTML = '<button class="retry-btn" onclick="resetScan()">重新扫描</button>';
       return;
     }
@@ -836,6 +836,7 @@ function decodeBase64Qr(dataUrl) {
   return new Promise(function(resolve) {
     var img = new Image();
     img.onload = function() {
+      console.log('innerQR image loaded: ' + img.width + 'x' + img.height);
       var c = document.createElement('canvas');
       c.width = img.width; c.height = img.height;
       var ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
@@ -843,10 +844,17 @@ function decodeBase64Qr(dataUrl) {
       try {
         var code = jsQR(id.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
         if (!code) code = jsQR(id.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+        console.log('innerQR decode result: ' + (code ? code.data.slice(0,50) : 'null'));
         resolve(code ? code.data : null);
-      } catch(e) { resolve(null); }
+      } catch(e) {
+        console.log('innerQR decode error: ' + e.message);
+        resolve(null);
+      }
     };
-    img.onerror = function() { resolve(null); };
+    img.onerror = function(e) {
+      console.log('innerQR image load error: ' + (e.message || 'unknown'));
+      resolve(null);
+    };
     img.src = dataUrl;
   });
 }
