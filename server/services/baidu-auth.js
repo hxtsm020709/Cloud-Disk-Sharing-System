@@ -1,42 +1,56 @@
 const axios = require('axios');
 const https = require('https');
 
-// 服务端解码base64图片中的二维码（使用jsQR，兼容Node.js）
+// 服务端解码base64图片中的二维码（多种策略）
 async function decodeQRFromBase64(dataUrl) {
+  const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+  const buffer = Buffer.from(base64Data, 'base64');
+
+  // 策略1: jsQR + jimp
   try {
     const Jimp = require('jimp');
     const jsQR = require('jsqr');
-    const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
     const image = await Jimp.read(buffer);
     image.grayscale();
 
     const w = image.bitmap.width;
     const h = image.bitmap.height;
+    if (w === 0 || h === 0) throw new Error('zero-size image');
+
     const rgba = new Uint8ClampedArray(image.bitmap.data);
     const code = jsQR(rgba, w, h, { inversionAttempts: 'attemptBoth' });
+    if (code) { console.log('[qr-decode] jsQR:', code.data.slice(0,80)); return code.data; }
 
-    if (code) {
-      console.log('[qr-decode] jsQR success:', code.data.slice(0, 80));
-      return code.data;
-    }
-    // 尝试缩放到500px以内
     if (w > 500 || h > 500) {
-      const scale = Math.min(500 / w, 500 / h);
-      image.resize(Math.floor(w * scale), Math.floor(h * scale));
+      image.resize(Math.floor(w * 0.5), Math.floor(h * 0.5));
       const r2 = new Uint8ClampedArray(image.bitmap.data);
       const code2 = jsQR(r2, image.bitmap.width, image.bitmap.height, { inversionAttempts: 'attemptBoth' });
-      if (code2) {
-        console.log('[qr-decode] jsQR success (scaled):', code2.data.slice(0, 80));
-        return code2.data;
+      if (code2) { console.log('[qr-decode] jsQR(scaled):', code2.data.slice(0,80)); return code2.data; }
+    }
+    console.log('[qr-decode] jsQR failed');
+  } catch(e) { console.log('[qr-decode] jsQR error:', e.message); }
+
+  // 策略2: 上传到 qrserver API 解码
+  try {
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('file', buffer, { filename: 'qr.png', contentType: 'image/png' });
+    const res = await client.post('https://api.qrserver.com/v1/read-qr-code/', form, {
+      headers: form.getHeaders(),
+      timeout: 15000,
+    });
+    const result = res.data;
+    console.log('[qr-decode] qrserver:', JSON.stringify(result).slice(0,200));
+    if (Array.isArray(result) && result[0]?.symbol?.[0]?.data) {
+      const decoded = result[0].symbol[0].data;
+      if (decoded && decoded !== 'null') {
+        console.log('[qr-decode] qrserver success:', decoded.slice(0,80));
+        return decoded;
       }
     }
-    console.log('[qr-decode] jsQR no QR found in', w + 'x' + h, 'image');
-    return null;
-  } catch(e) {
-    console.log('[qr-decode] exception:', e.message);
-    return null;
-  }
+  } catch(e) { console.log('[qr-decode] qrserver error:', e.message); }
+
+  return null;
 }
 
 // 模拟真实浏览器的请求实例
