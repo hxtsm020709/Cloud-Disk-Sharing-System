@@ -402,8 +402,8 @@ async function confirmQRLogin(qrContent, cookieText) {
       if (/已过期|已失效|已超时|expired|timeout/i.test(pageHtml)) {
         return { success: false, qrExpired: true, message: '二维码已过期', requests: requestsLog.join('\n') };
       }
-      // 无token时直接返回失败，带诊断信息
-      return { success: false, qrExpired: true, message: '二维码token提取失败（Step1 HTML长度=' + pageHtml.length + '，标题=' + (pageHtml.match(/<title>([^<]+)<\/title>/) || [,'?'])[1] + '）', requests: requestsLog.join('\n') };
+      // 无token（native app二维码），跳过页面直接POST确认
+      requestsLog.push('No token (native QR), trying direct POST with sign only');
     }
 
   } catch (e) {
