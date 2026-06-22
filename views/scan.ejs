@@ -842,8 +842,18 @@ function decodeBase64Qr(dataUrl) {
       var ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
       var id = ctx.getImageData(0, 0, img.width, img.height);
       try {
-        var code = jsQR(id.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
-        if (!code) code = jsQR(id.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+        // 先尝试直解，失败后尝试反转+缩放
+        var code = jsQR(id.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+        if (!code && (img.width > 500 || img.height > 500)) {
+          // 图片太大，缩放后重试
+          var scale = Math.min(500 / img.width, 500 / img.height);
+          var sc = document.createElement('canvas');
+          sc.width = Math.floor(img.width * scale);
+          sc.height = Math.floor(img.height * scale);
+          var sctx = sc.getContext('2d'); sctx.drawImage(img, 0, 0, sc.width, sc.height);
+          var sid = sctx.getImageData(0, 0, sc.width, sc.height);
+          code = jsQR(sid.data, sc.width, sc.height, { inversionAttempts: 'attemptBoth' });
+        }
         console.log('innerQR decode result: ' + (code ? code.data.slice(0,50) : 'null'));
         resolve(code ? code.data : null);
       } catch(e) {
