@@ -418,14 +418,9 @@ async function confirmQRLogin(qrContent, cookieText) {
     return { success: false, message: '访问确认页面失败', requests: requestsLog.join('\n') };
   }
 
-  // Step 1 未提取到 token — 手机端页面是 JS 动态渲染
+  // Step 1 未提取到 token — 手机端页面 JS 动态渲染，跳过页面直接POST确认
   if (!pageToken) {
-    console.log('[confirmQRLogin] === TOKEN NOT FOUND, PAGE HTML (first 1500) ===');
-    console.log(pageHtml.slice(0, 1500));
-    console.log('[confirmQRLogin] === PAGE HTML (last 1000) ===');
-    console.log(pageHtml.slice(-1000));
-    requestsLog.push('HTML已输出至服务端日志，请查看Railway Logs');
-    return { success: false, qrExpired: true, message: '手机端页面token格式不匹配，请查看服务端日志获取HTML详情', requests: requestsLog.join('\n') };
+    requestsLog.push('Step1 无token，尝试直接POST（跳过页面token提取）');
   }
 
   // ====== Step 2: POST 确认登录（VIP Cookie + 会话 Cookie 合并回传） ======
