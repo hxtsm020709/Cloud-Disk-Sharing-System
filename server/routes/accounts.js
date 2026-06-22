@@ -593,4 +593,134 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
+// API: 扫码测试登录 — 使用摄像头扫码验证账号能否正常登录，失败时优先切换SVIP账号
+router.post('/api/accounts/:id/scan-test', requireAuth, async (req, res) => {
+  const accountId = parseInt(req.params.id);
+  const { qrContent } = req.body;
+
+  if (!qrContent) {
+    return res.json({ success: false, message: '未检测到二维码内容' });
+  }
+
+  const { confirmQRLogin, checkCookieValid } = require('../services/baidu-auth');
+  const { decrypt } = require('../utils/crypto');
+
+  const account = db.get('SELECT * FROM accounts WHERE id = ? AND is_deleted = 0', [accountId]);
+  if (!account) {
+    return res.json({ success: false, message: '账号不存在' });
+  }
+
+  let cookieText;
+  try { cookieText = decrypt(account.cookie_encrypted); }
+  catch (e) { return res.json({ success: false, message: 'Cookie 解密失败' }); }
+
+  console.log(`[scan-test] 开始测试账号「${account.nickname}」(ID:${account.id}, vip:${account.vip_type})`);
+
+  // Step 1: 使用目标账号尝试登录
+  let result = await confirmQRLogin(qrContent, cookieText);
+
+  if (result.success) {
+    db.run(`UPDATE accounts SET cookie_status='valid', cookie_updated_at=datetime('now','localtime') WHERE id=?`, [accountId]);
+    console.log(`[scan-test] 账号「${account.nickname}」登录成功`);
+    return res.json({
+      success: true,
+      message: '登录成功',
+      usedAccount: { id: account.id, nickname: account.nickname, vipType: account.vip_type },
+      rotated: false,
+    });
+  }
+
+  console.log(`[scan-test] 账号「${account.nickname}」登录失败: ${result.message?.slice(0, 80)}`);
+
+  // Step 2: 登录失败，标记当前账号状态并尝试切换
+  const isVerifyBlock = result.errno === 400023;
+  const isQrExpired = result.qrExpired === true;
+  const isQrRelated = /二维码|qr.*(过期|失效|超时|expired|invalid|timeout)/i.test(result.message || '');
+
+  if (!isVerifyBlock && !isQrExpired && !isQrRelated) {
+    db.run(`UPDATE accounts SET cookie_status='expired', cookie_updated_at=datetime('now','localtime') WHERE id=?`, [accountId]);
+  }
+
+  // 获取其他可用账号，按会员等级排序：SVIP > VIP > 普通 > 未知
+  const otherAccounts = db.all(
+    'SELECT * FROM accounts WHERE is_deleted = 0 AND is_paused = 0 AND id != ?',
+    [accountId]
+  );
+
+  const vipRank = { 'svip': 0, 'vip': 1, 'normal': 2 };
+  otherAccounts.sort((a, b) => {
+    const ra = vipRank[a.vip_type] ?? 3;
+    const rb = vipRank[b.vip_type] ?? 3;
+    return ra - rb;
+  });
+
+  console.log(`[scan-test] 尝试切换，候选账号排序: ${otherAccounts.map(a => `${a.nickname}(${a.vip_type})`).join(', ')}`);
+
+  let rotated = false;
+  let rotatedAccount = null;
+
+  for (const acc of otherAccounts) {
+    try {
+      const testCookie = decrypt(acc.cookie_encrypted);
+      const validCheck = await checkCookieValid(testCookie);
+
+      if (!validCheck.valid) {
+        db.run(`UPDATE accounts SET cookie_status='expired', cookie_updated_at=datetime('now','localtime') WHERE id=?`, [acc.id]);
+        continue;
+      }
+
+      db.run(`UPDATE accounts SET cookie_status='valid', vip_type=?, cookie_updated_at=datetime('now','localtime') WHERE id=?`,
+        [validCheck.vipType || acc.vip_type, acc.id]);
+
+      console.log(`[scan-test] 尝试切换至「${acc.nickname}」(vip:${validCheck.vipType || acc.vip_type})`);
+
+      const fbResult = await confirmQRLogin(qrContent, testCookie);
+
+      if (fbResult.success) {
+        rotated = true;
+        rotatedAccount = {
+          id: acc.id,
+          nickname: acc.nickname,
+          vipType: validCheck.vipType || acc.vip_type,
+        };
+        result = fbResult;
+        break;
+      }
+
+      // QR确认失败但可能是账号问题
+      const fbIsVerify = fbResult.errno === 400023;
+      const fbIsQrExpired = fbResult.qrExpired === true;
+      if (!fbIsVerify && !fbIsQrExpired) {
+        db.run(`UPDATE accounts SET cookie_status='expired', cookie_updated_at=datetime('now','localtime') WHERE id=?`, [acc.id]);
+      }
+    } catch (e) {
+      console.log(`[scan-test] 账号「${acc.nickname}」切换异常:`, e.message?.slice(0, 60));
+    }
+  }
+
+  if (rotated) {
+    const vipLabel = rotatedAccount.vipType === 'svip' ? 'SVIP' : (rotatedAccount.vipType === 'vip' ? 'VIP' : '普通');
+    console.log(`[scan-test] 已切换至${vipLabel}账号「${rotatedAccount.nickname}」`);
+    return res.json({
+      success: true,
+      message: `登录成功（已自动切换至${vipLabel}账号：${rotatedAccount.nickname}）`,
+      usedAccount: rotatedAccount,
+      rotated: true,
+      originalAccount: { id: account.id, nickname: account.nickname },
+    });
+  }
+
+  // 全部失败，返回友好提示
+  let msg = result.message || '登录失败';
+  if (isQrExpired || isQrRelated) {
+    msg = '二维码已过期，请刷新PC端百度网盘获取新二维码后重新扫码';
+  } else if (isVerifyBlock) {
+    msg = '所有账号均触发安全验证，请在常用网络环境下重新获取Cookie';
+  } else if (!rotated) {
+    msg = '所有可用账号均已失效，请联系管理员更新Cookie';
+  }
+
+  res.json({ success: false, message: msg, rotated: false });
+});
+
 module.exports = { router };

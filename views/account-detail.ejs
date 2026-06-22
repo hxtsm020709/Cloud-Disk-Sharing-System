@@ -1,3 +1,106 @@
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<style>
+/* ======== 扫码测试取景框 ======== */
+.scan-test-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #0a0a0a;
+  flex-direction: column;
+  align-items: center;
+}
+.scan-test-overlay.show { display: flex; }
+.scan-test-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 16px;
+  color: #fff;
+  flex-shrink: 0;
+}
+.scan-test-topbar .title { font-size: 17px; font-weight: 600; }
+.scan-test-topbar .close-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.12);
+  border: none; color: #fff; font-size: 20px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.scan-test-viewport {
+  position: relative;
+  width: 280px; height: 280px;
+  flex-shrink: 0;
+  margin-top: 8vh;
+}
+.scan-test-viewport video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.scan-test-line {
+  position: absolute; left: 4px; right: 4px; height: 2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(74,144,217,0.3) 15%, #4A90D9 50%, rgba(74,144,217,0.3) 85%, transparent 100%);
+  box-shadow: 0 0 8px rgba(74,144,217,0.6);
+  border-radius: 1px;
+  animation: scanTestMove 2.2s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+  z-index: 5; pointer-events: none;
+}
+@keyframes scanTestMove {
+  0% { top: 8px; opacity: 0; }
+  10% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { top: calc(100% - 10px); opacity: 0; }
+}
+.scan-test-corner {
+  position: absolute; width: 24px; height: 24px; z-index: 6; pointer-events: none;
+}
+.scan-test-corner::before, .scan-test-corner::after {
+  content: ''; position: absolute; background: #4A90D9; border-radius: 2px;
+}
+.scan-test-corner::before { width: 24px; height: 3px; top: 0; left: 0; }
+.scan-test-corner::after { width: 3px; height: 24px; top: 0; left: 0; }
+.scan-test-corner-tl { top: -1px; left: -1px; }
+.scan-test-corner-tr { top: -1px; right: -1px; }
+.scan-test-corner-tr::before, .scan-test-corner-tr::after { left: auto; right: 0; }
+.scan-test-corner-bl { bottom: -1px; left: -1px; }
+.scan-test-corner-bl::before, .scan-test-corner-bl::after { top: auto; bottom: 0; }
+.scan-test-corner-br { bottom: -1px; right: -1px; }
+.scan-test-corner-br::before, .scan-test-corner-br::after { top: auto; bottom: 0; left: auto; right: 0; }
+.scan-test-mask {
+  position: absolute; background: rgba(10,10,10,0.55); pointer-events: none; z-index: 3;
+}
+.scan-test-status {
+  flex-shrink: 0; padding: 12px 24px; text-align: center;
+  font-size: 13px; color: #a0a0b0; min-height: 42px;
+  display: flex; align-items: center; justify-content: center;
+}
+.scan-test-actions {
+  padding: 0 24px 24px; width: 100%;
+}
+.scan-test-actions .confirm-btn {
+  width: 100%; padding: 14px; background: #4A90D9; color: #fff;
+  border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer;
+  transition: all 0.15s;
+}
+.scan-test-actions .confirm-btn:active { transform: scale(0.97); }
+.scan-test-actions .retry-btn {
+  display: block; width: 100%; margin-top: 10px; padding: 10px;
+  background: transparent; color: #999;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 10px; font-size: 14px; cursor: pointer;
+}
+.scan-test-hint {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 0 24px; text-align: center; min-height: 80px;
+}
+.scan-test-hint .hint-text { color: #c0c0c8; font-size: 14px; line-height: 1.8; }
+.scan-test-hint .hint-icon { font-size: 28px; margin-bottom: 10px; opacity: 0.6; }
+</style>
+
 <div class="flex-between" style="margin-bottom: 20px;">
   <div style="display: flex; align-items: center; gap: 12px;">
     <a href="/admin/accounts" class="btn btn-secondary btn-sm">&larr; 返回账号列表</a>
@@ -81,6 +184,7 @@
           <span style="margin-left: 8px; font-size: 12px; color: #999;">到期 <%= account.vip_expire_date %></span>
         <% } %>
         <button class="btn btn-sm btn-secondary" onclick="fetchVip()" id="fetchVipBtn" style="margin-left: 8px;">抓取账号信息</button>
+        <button class="btn btn-sm btn-secondary" onclick="scanTest(<%= account.id %>, '<%= account.nickname %>')" id="scanTestBtn" style="margin-left: 8px;">扫码测试</button>
       </div>
       <div style="margin-bottom: 12px;">
         <span style="color: #666; font-size: 13px;">最后更新：</span>
@@ -130,6 +234,30 @@
 
 </div>
 
+
+<!-- ======== 扫码测试取景框 ======== -->
+<div class="scan-test-overlay" id="scanTestOverlay">
+  <div class="scan-test-topbar">
+    <span class="title">扫码测试登录</span>
+    <button class="close-btn" onclick="closeScanTest()">&times;</button>
+  </div>
+  <div class="scan-test-viewport" id="scanTestViewport">
+    <video id="scanTestVideo" autoplay playsinline></video>
+    <canvas id="scanTestCanvas" style="display:none;"></canvas>
+    <div class="scan-test-corner scan-test-corner-tl"></div>
+    <div class="scan-test-corner scan-test-corner-tr"></div>
+    <div class="scan-test-corner scan-test-corner-bl"></div>
+    <div class="scan-test-corner scan-test-corner-br"></div>
+    <div class="scan-test-line" id="scanTestLine"></div>
+  </div>
+  <div class="scan-test-status" id="scanTestStatus">正在启动摄像头...</div>
+  <div class="scan-test-actions" id="scanTestActions">
+    <div class="scan-test-hint" id="scanTestHint">
+      <div class="hint-icon">&#128269;</div>
+      <div class="hint-text">将 PC 端百度网盘<br>登录二维码对准取景框</div>
+    </div>
+  </div>
+</div>
 
 <script>
 var fullCookie = <%- JSON.stringify(cookieFull || '') %>;
@@ -263,6 +391,156 @@ async function deleteAccount(id) {
     location.href = '/admin/accounts';
   } else {
     alert(data.message);
+  }
+}
+
+// ======== 扫码测试登录 ========
+var scanTestStream = null;
+var scanTestTimer = null;
+var scanTestCapturedQR = '';
+var scanTestAccountId = null;
+var scanTestAccountName = '';
+var scanTestConfirming = false;
+
+async function scanTest(id, nickname) {
+  scanTestAccountId = id;
+  scanTestAccountName = nickname;
+  scanTestCapturedQR = '';
+  scanTestConfirming = false;
+
+  var overlay = document.getElementById('scanTestOverlay');
+  overlay.classList.add('show');
+  document.getElementById('scanTestStatus').textContent = '正在启动摄像头...';
+  document.getElementById('scanTestHint').style.display = 'flex';
+  document.getElementById('scanTestActions').innerHTML =
+    '<div class="scan-test-hint" id="scanTestHint"><div class="hint-icon">&#128269;</div><div class="hint-text">将 PC 端百度网盘<br>登录二维码对准取景框</div></div>';
+
+  try {
+    scanTestStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 640 } }
+    });
+    var video = document.getElementById('scanTestVideo');
+    video.srcObject = scanTestStream;
+    await video.play();
+    document.getElementById('scanTestStatus').textContent = '测试账号：' + nickname + ' — 请扫描二维码';
+    scanTestLoop();
+  } catch (err) {
+    document.getElementById('scanTestStatus').innerHTML =
+      '<span style="color:#FF4D4F;">摄像头启动失败</span><br><small style="color:#999;">请确保使用HTTPS访问并授予摄像头权限</small>';
+  }
+}
+
+function scanTestLoop() {
+  if (scanTestCapturedQR || scanTestConfirming || !document.getElementById('scanTestOverlay').classList.contains('show')) return;
+  var video = document.getElementById('scanTestVideo');
+  if (video.readyState < video.HAVE_ENOUGH_DATA) { scanTestTimer = requestAnimationFrame(scanTestLoop); return; }
+  var canvas = document.getElementById('scanTestCanvas');
+  var w = video.videoWidth || 640, h = video.videoHeight || 480;
+  canvas.width = w; canvas.height = h;
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, w, h);
+  var imageData = ctx.getImageData(0, 0, w, h);
+  try {
+    var code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
+    if (code && code.data) {
+      scanTestCapturedQR = code.data;
+      stopScanTestCamera();
+      showScanTestConfirm();
+      return;
+    }
+  } catch(e) {}
+  scanTestTimer = requestAnimationFrame(scanTestLoop);
+}
+
+function stopScanTestCamera() {
+  if (scanTestTimer) { cancelAnimationFrame(scanTestTimer); scanTestTimer = null; }
+  if (scanTestStream) { scanTestStream.getTracks().forEach(function(t) { t.stop(); }); scanTestStream = null; }
+}
+
+function closeScanTest() {
+  stopScanTestCamera();
+  document.getElementById('scanTestOverlay').classList.remove('show');
+  scanTestCapturedQR = '';
+  scanTestConfirming = false;
+  scanTestAccountId = null;
+}
+
+function showScanTestConfirm() {
+  document.getElementById('scanTestStatus').innerHTML =
+    '<span style="color:#52C41A;">已检测到二维码</span>';
+  document.getElementById('scanTestActions').innerHTML =
+    '<button class="confirm-btn" onclick="doScanTest()">确认测试登录</button>' +
+    '<button class="retry-btn" onclick="resetScanTest()">重新扫描</button>';
+}
+
+async function doScanTest() {
+  scanTestConfirming = true;
+  document.getElementById('scanTestStatus').textContent = '正在测试登录...';
+  document.getElementById('scanTestActions').innerHTML = '';
+
+  var btn = document.getElementById('scanTestBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '测试中...'; }
+
+  try {
+    var res = await fetch('/admin/api/accounts/' + scanTestAccountId + '/scan-test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ qrContent: scanTestCapturedQR })
+    });
+    var data = await res.json();
+
+    if (data.success) {
+      var extra = data.rotated
+        ? '<br><small style="color:#FAAD14;">已自动切换至备用账号：' + data.usedAccount.nickname + '（' + (data.usedAccount.vipType === 'svip' ? 'SVIP' : data.usedAccount.vipType === 'vip' ? 'VIP' : '普通') + '）</small>'
+        : '<br><small style="color:#52C41A;">账号「' + data.usedAccount.nickname + '」Cookie有效，登录正常</small>';
+      document.getElementById('scanTestStatus').innerHTML =
+        '<span style="color:#52C41A;font-size:16px;">登录成功！</span>' + extra;
+      document.getElementById('scanTestActions').innerHTML =
+        '<button class="retry-btn" onclick="resetScanTest()">再次测试</button>' +
+        '<button class="retry-btn" onclick="closeScanTest()">关闭</button>';
+
+      // 更新 Cookie 状态显示
+      document.getElementById('cookieStatus').innerHTML = '<span class="tag tag-success">有效</span>';
+      if (data.usedAccount.vipType) {
+        document.getElementById('vipInfo').innerHTML = '<span class="tag tag-warning">' + data.usedAccount.vipType.toUpperCase() + '</span>';
+      }
+    } else {
+      document.getElementById('scanTestStatus').innerHTML =
+        '<span style="color:#FF4D4F;">登录失败</span><br><small style="color:#999;">' + (data.message || '未知错误') + '</small>';
+      document.getElementById('scanTestActions').innerHTML =
+        '<button class="retry-btn" onclick="resetScanTest()">重新扫描</button>' +
+        '<button class="retry-btn" onclick="closeScanTest()">关闭</button>';
+    }
+  } catch (e) {
+    document.getElementById('scanTestStatus').innerHTML =
+      '<span style="color:#FF4D4F;">网络错误</span><br><small style="color:#999;">' + (e.message || e) + '</small>';
+    document.getElementById('scanTestActions').innerHTML =
+      '<button class="retry-btn" onclick="resetScanTest()">重新扫描</button>' +
+      '<button class="retry-btn" onclick="closeScanTest()">关闭</button>';
+  }
+  scanTestConfirming = false;
+  if (btn) { btn.disabled = false; btn.textContent = '扫码测试'; }
+}
+
+async function resetScanTest() {
+  scanTestCapturedQR = '';
+  scanTestConfirming = false;
+  document.getElementById('scanTestStatus').textContent = '正在重新启动摄像头...';
+  document.getElementById('scanTestActions').innerHTML =
+    '<div class="scan-test-hint" id="scanTestHint"><div class="hint-icon">&#128269;</div><div class="hint-text">将 PC 端百度网盘<br>登录二维码对准取景框</div></div>';
+
+  try {
+    scanTestStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 640 } }
+    });
+    var video = document.getElementById('scanTestVideo');
+    video.srcObject = scanTestStream;
+    await video.play();
+    document.getElementById('scanTestStatus').textContent = '测试账号：' + scanTestAccountName + ' — 请扫描二维码';
+    scanTestLoop();
+  } catch (err) {
+    document.getElementById('scanTestStatus').innerHTML =
+      '<span style="color:#FF4D4F;">摄像头启动失败</span><br><small style="color:#999;">' + (err.message || err) + '</small>';
   }
 }
 </script>

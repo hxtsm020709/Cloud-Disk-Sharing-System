@@ -38,6 +38,13 @@
   </form>
 </div>
 
+<div class="card" style="margin-top: 16px;">
+  <div class="card-title" style="color: #FF4D4F;">链接编号管理</div>
+  <p style="color: #999; font-size: 13px; margin-bottom: 12px;">重置所有链接的展示编号，按创建时间从 1 开始重新排序。删除链接后编号不会自动回收，重置后方可回收。</p>
+  <button class="btn btn-danger" onclick="resetLinkNumbers()" id="resetNumBtn">重置链接编号</button>
+  <span id="resetNumMsg" style="margin-left: 12px; font-size: 13px;"></span>
+</div>
+
 <script>
 document.getElementById('settingsForm').addEventListener('submit', async function(e) {
   e.preventDefault();
@@ -64,4 +71,26 @@ document.getElementById('settingsForm').addEventListener('submit', async functio
     msg.style.color = '#FF4D4F';
   }
 });
+
+async function resetLinkNumbers() {
+  if (!confirm('确定要重置所有链接的展示编号吗？\n\n所有链接将按创建时间从 1 开始重新编号。')) return;
+
+  var btn = document.getElementById('resetNumBtn');
+  var msg = document.getElementById('resetNumMsg');
+  btn.disabled = true;
+  btn.textContent = '重置中...';
+  msg.textContent = '';
+
+  try {
+    var res = await fetch('/admin/api/links/reset-numbers', { method: 'POST' });
+    var data = await res.json();
+    msg.textContent = data.message;
+    msg.style.color = data.success ? '#52C41A' : '#FF4D4F';
+  } catch(e) {
+    msg.textContent = '网络错误';
+    msg.style.color = '#FF4D4F';
+  }
+  btn.disabled = false;
+  btn.textContent = '重置链接编号';
+}
 </script>

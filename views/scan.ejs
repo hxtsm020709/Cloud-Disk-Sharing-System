@@ -397,22 +397,28 @@
 
 <!-- 卡密信息 -->
 <div class="card">
-  <div class="card-title">卡密信息</div>
+  <div class="card-title">账号信息</div>
+  <% if (typeof displayNumber !== 'undefined' && displayNumber) { %>
   <div class="info-row">
-    <span class="label">有效期</span>
-    <span class="value"><%= expireAt %></span>
+    <span class="label">编号</span>
+    <span class="value"><span style="background:#4A90D9;color:#fff;border-radius:3px;padding:1px 8px;font-size:13px;font-weight:700;">#<%= String(displayNumber).padStart(3, '0') %></span></span>
   </div>
+  <% } %>
   <div class="info-row">
     <span class="label">账号名称</span>
     <span class="value" id="infoAccountName"><%= accountName %></span>
+  </div>
+  <div class="info-row">
+    <span class="label">状态</span>
+    <span class="value"><span class="status-dot <%= statusClass %>"></span><span id="infoStatus"><%= statusText %></span></span>
   </div>
   <div class="info-row">
     <span class="label">已用次数</span>
     <span class="value" id="infoUseCount"><%= useCount %> / <%= maxUses %> 次</span>
   </div>
   <div class="info-row">
-    <span class="label">状态</span>
-    <span class="value"><span class="status-dot <%= statusClass %>"></span><span id="infoStatus"><%= statusText %></span></span>
+    <span class="label">有效期</span>
+    <span class="value"><%= expireAt %><% if (typeof remainingHours !== 'undefined' && remainingHours !== null) { %> <span style="color:#999;font-size:12px;">（剩余 <%= remainingHours %>h）</span><% } %></span>
   </div>
 </div>
 

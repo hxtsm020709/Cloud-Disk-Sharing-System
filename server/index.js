@@ -135,14 +135,23 @@ async function start() {
 
     const settings = db.getAllSettings();
 
+    let remainingHours = null;
+    if (link.first_used_at && link.expire_at && link.status === 'active') {
+      const expireMs = new Date(link.expire_at.replace(' ', 'T')).getTime();
+      const remainingMs = expireMs - Date.now();
+      if (remainingMs > 0) remainingHours = (remainingMs / 3600000).toFixed(1);
+    }
+
     res.render('scan', {
       layout: false,
       token: link.token,
+      displayNumber: link.display_number,
       accountId: link.account_id,
       accountName: account ? account.nickname : '未知',
       expireAt: link.first_used_at
         ? (link.expire_at ? link.expire_at.slice(0, 16) : '--')
         : ('首次使用后 ' + (link.expire_hours || 24) + ' 小时内有效'),
+      remainingHours,
       useCount: link.use_count,
       maxUses: link.max_uses || 20,
       linkStatus: link.status,

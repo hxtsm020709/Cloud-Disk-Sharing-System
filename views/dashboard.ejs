@@ -207,6 +207,7 @@
         <% soloLinks.forEach(function(link) { %>
         <div class="link-item">
           <div class="link-info">
+            <% if (link.display_number) { %><span style="display:inline-flex;align-items:center;justify-content:center;min-width:32px;height:20px;background:#4A90D9;color:#fff;border-radius:3px;font-size:11px;font-weight:700;flex-shrink:0;">#<%= String(link.display_number).padStart(3, '0') %></span><% } %>
             <strong><%= link.account_nickname || '已删除' %></strong>
             <span class="link-token">/<%= link.token.slice(0,12) %>...</span>
             <span style="font-size:11px;color:#999;">x<%= link.use_count %></span>
@@ -268,6 +269,7 @@
         <% poolLinks.forEach(function(link) { %>
         <div class="link-item">
           <div class="link-info">
+            <% if (link.display_number) { %><span style="display:inline-flex;align-items:center;justify-content:center;min-width:32px;height:20px;background:#4A90D9;color:#fff;border-radius:3px;font-size:11px;font-weight:700;flex-shrink:0;">#<%= String(link.display_number).padStart(3, '0') %></span><% } %>
             <strong><%= link.account_nickname || '已删除' %></strong>
             <span class="link-token">/<%= link.token.slice(0,12) %>...</span>
             <span style="font-size:11px;color:#999;">x<%= link.use_count %></span>

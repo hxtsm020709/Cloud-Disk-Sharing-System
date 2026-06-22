@@ -83,7 +83,7 @@
 
   <!-- 筛选栏 -->
   <form method="GET" action="/admin/links" style="display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;">
-    <input type="text" name="search" class="form-control" placeholder="搜索账号名称..." value="<%= typeof search !== 'undefined' ? search : '' %>" style="max-width: 220px;">
+    <input type="text" name="search" class="form-control" placeholder="搜索编号、账号名称或链接..." value="<%= typeof search !== 'undefined' ? search : '' %>" style="max-width: 220px;">
     <select name="status" class="form-control" style="max-width: 130px;">
       <option value="all" <%= (typeof status === 'undefined' || status === 'all') ? 'selected' : '' %>>全部状态</option>
       <option value="active" <%= status === 'active' ? 'selected' : '' %>>有效</option>
@@ -148,6 +148,7 @@
       <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #F9FAFB; border-radius: 8px; border: 1px solid #E8E8E8; flex-wrap: wrap; gap: 10px;">
         <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
           <input type="checkbox" class="link-check" value="<%= link.id %>" onchange="updateSelection()" style="flex-shrink: 0;">
+          <% if (link.display_number) { %><span style="display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 24px; background: #4A90D9; color: #fff; border-radius: 4px; font-size: 12px; font-weight: 700; flex-shrink: 0;">#<%= String(link.display_number).padStart(3, '0') %></span><% } %>
           <strong style="white-space: nowrap;"><%= link.account_nickname || '已删除' %></strong>
           <span style="color: #999; font-size: 13px;"><%= link.expire_hours %>h</span>
           <span style="color: #999; font-size: 13px;" title="<%= link.expire_at %>"><%= link.first_used_at ? (link.expire_at ? link.expire_at.slice(0, 16) : '--') : '待使用' %></span>
@@ -364,7 +365,8 @@ async function genPoolLink(e) {
       tbody.innerHTML = '';
       tokens.forEach(function(t) {
         var linkUrl = location.origin + '/s/' + t.token;
-        tbody.innerHTML += '<tr><td>' + t.accountName + (t.vipType ? ' <span class=\"tag tag-warning\">' + t.vipType.toUpperCase() + '</span>' : '') + '</td><td style=\"font-size:11px;color:#999;\">已用 ' + (t.score || 0) + ' 次</td><td><code style=\"font-size:11px;\">' + linkUrl.slice(0,50) + '...</code></td><td><button class=\"btn btn-sm btn-secondary\" onclick=\"copyPoolUrl(\'' + linkUrl + '\')\">复制</button></td></tr>';
+        var numTag = t.displayNumber ? '<span style=\"display:inline-block;background:#4A90D9;color:#fff;border-radius:3px;padding:0 6px;font-size:11px;font-weight:700;margin-right:4px;\">#' + String(t.displayNumber).padStart(3, '0') + '</span>' : '';
+        tbody.innerHTML += '<tr><td>' + numTag + t.accountName + (t.vipType ? ' <span class=\"tag tag-warning\">' + t.vipType.toUpperCase() + '</span>' : '') + '</td><td style=\"font-size:11px;color:#999;\">已用 ' + (t.score || 0) + ' 次</td><td><code style=\"font-size:11px;\">' + linkUrl.slice(0,50) + '...</code></td><td><button class=\"btn btn-sm btn-secondary\" onclick=\"copyPoolUrl(\'' + linkUrl + '\')\">复制</button></td></tr>';
       });
       document.getElementById('poolResults').style.display = '';
     } else {

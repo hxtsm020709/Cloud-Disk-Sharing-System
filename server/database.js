@@ -83,6 +83,21 @@ async function init() {
   // 已有使用记录的旧链接：用创建时间作为 first_used_at
   try { db.run("UPDATE share_links SET first_used_at = created_at WHERE use_count > 0 AND first_used_at IS NULL"); } catch(e) {}
   try { db.run("ALTER TABLE accounts ADD COLUMN is_paused INTEGER DEFAULT 0"); } catch(e) { /* 列已存在 */ }
+  try { db.run("ALTER TABLE share_links ADD COLUMN display_number INTEGER"); } catch(e) { /* 列已存在 */ }
+  // 为旧链接补填编号（按创建时间从1开始）
+  try {
+    const unnumbered = db.all('SELECT id FROM share_links WHERE display_number IS NULL ORDER BY created_at ASC');
+    if (unnumbered.length > 0) {
+      const used = new Set(db.all('SELECT display_number FROM share_links WHERE display_number IS NOT NULL').map(r => r.display_number));
+      let next = 1;
+      for (const row of unnumbered) {
+        while (used.has(next)) next++;
+        db.run('UPDATE share_links SET display_number = ? WHERE id = ?', [next, row.id]);
+        used.add(next);
+      }
+      console.log(`[migration] 已为 ${unnumbered.length} 条旧链接补填展示编号`);
+    }
+  } catch(e) { /* 静默跳过 */ }
 
   save();
   return db;

@@ -13,6 +13,16 @@ const EXPIRE_OPTIONS = [
   { label: '3 天', hours: 72 },
 ];
 
+// 分配链接展示编号（1-500，取最小可用值）
+function assignDisplayNumber() {
+  const used = db.all('SELECT display_number FROM share_links WHERE display_number IS NOT NULL');
+  const usedSet = new Set(used.map(r => r.display_number));
+  for (let n = 1; n <= 500; n++) {
+    if (!usedSet.has(n)) return n;
+  }
+  return null; // 500个编号全部用完
+}
+
 // 分享链接管理页
 router.get('/links', requireAuth, (req, res) => {
   const accounts = db.all('SELECT id, nickname FROM accounts WHERE is_deleted = 0 ORDER BY nickname');
@@ -33,8 +43,8 @@ router.get('/links', requireAuth, (req, res) => {
   const params = [];
 
   if (search) {
-    sql += ' AND (a.nickname LIKE ? OR sl.token LIKE ?)';
-    params.push(`%${search}%`, `%${search}%`);
+    sql += ' AND (a.nickname LIKE ? OR sl.token LIKE ? OR CAST(sl.display_number AS TEXT) LIKE ?)';
+    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
   if (status === 'pending') {
     sql += " AND sl.status = 'active' AND sl.first_used_at IS NULL";
@@ -48,7 +58,12 @@ router.get('/links', requireAuth, (req, res) => {
     sql += ' AND (sl.is_pool IS NULL OR sl.is_pool = 0)';
   }
 
-  sql += ' ORDER BY sl.created_at DESC';
+  if (search && /^\d+$/.test(search)) {
+    sql += ' ORDER BY CASE WHEN CAST(sl.display_number AS TEXT) = ? THEN 0 ELSE 1 END, sl.created_at DESC';
+    params.push(search);
+  } else {
+    sql += ' ORDER BY sl.created_at DESC';
+  }
 
   const links = db.all(sql, params);
 
@@ -84,16 +99,18 @@ router.post('/api/links', requireAuth, (req, res) => {
   const pad = n => String(n).padStart(2, '0');
   const expireAt = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
+  const displayNumber = assignDisplayNumber();
   db.run(
-    `INSERT INTO share_links (token, account_id, expire_hours, expire_at) VALUES (?, ?, ?, ?)`,
-    [token, account_id, hours, expireAt]
+    `INSERT INTO share_links (token, account_id, expire_hours, expire_at, display_number) VALUES (?, ?, ?, ?, ?)`,
+    [token, account_id, hours, expireAt, displayNumber]
   );
 
   res.json({
     success: true,
-    message: '链接已生成',
+    message: `链接已生成（编号 #${displayNumber}）`,
     token,
     expireAt,
+    displayNumber,
   });
 });
 
@@ -234,16 +251,18 @@ router.post('/api/links/pool', requireAuth, async (req, res) => {
   const expireAt = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
   const token = crypto.randomBytes(12).toString('hex');
+  const displayNumber = assignDisplayNumber();
   db.run(
-    `INSERT INTO share_links (token, account_id, expire_hours, expire_at, max_uses, is_pool) VALUES (?, ?, ?, ?, 20, 1)`,
-    [token, best.account.id, hours, expireAt]
+    `INSERT INTO share_links (token, account_id, expire_hours, expire_at, max_uses, is_pool, display_number) VALUES (?, ?, ?, ?, 20, 1, ?)`,
+    [token, best.account.id, hours, expireAt, displayNumber]
   );
 
   res.json({
     success: true,
-    message: `已生成共享链接（账号: ${best.account.nickname}，当前负载 ${best.score} 次，${hours}h 有效）`,
+    message: `已生成共享链接（编号 #${displayNumber}, 账号: ${best.account.nickname}，当前负载 ${best.score} 次，${hours}h 有效）`,
     token: { token, accountId: best.account.id, accountName: best.account.nickname, vipType: best.vipType, score: best.score },
     expireAt,
+    displayNumber,
   });
 });
 
@@ -306,11 +325,12 @@ router.post('/api/links/batch-pool', requireAuth, async (req, res) => {
     usedScores[best.account.id] = (usedScores[best.account.id] || 0) + 1;
 
     const token = crypto.randomBytes(12).toString('hex');
+    const displayNumber = assignDisplayNumber();
     db.run(
-      `INSERT INTO share_links (token, account_id, expire_hours, expire_at, max_uses, is_pool) VALUES (?, ?, ?, ?, 20, 1)`,
-      [token, best.account.id, hours, expireAt]
+      `INSERT INTO share_links (token, account_id, expire_hours, expire_at, max_uses, is_pool, display_number) VALUES (?, ?, ?, ?, 20, 1, ?)`,
+      [token, best.account.id, hours, expireAt, displayNumber]
     );
-    tokens.push({ token, accountId: best.account.id, accountName: best.account.nickname, vipType: best.vipType, score: best.score });
+    tokens.push({ token, accountId: best.account.id, accountName: best.account.nickname, vipType: best.vipType, score: best.score, displayNumber });
   }
 
   res.json({
@@ -368,7 +388,7 @@ router.get('/api/links/export', requireAuth, (req, res) => {
   const pool = req.query.pool || '';
 
   let sql = `
-    SELECT sl.token, a.nickname, sl.is_pool, sl.first_used_at, sl.expire_hours, sl.expire_at,
+    SELECT sl.token, sl.display_number, a.nickname, sl.is_pool, sl.first_used_at, sl.expire_hours, sl.expire_at,
            sl.use_count, sl.max_uses, sl.status, sl.created_at
     FROM share_links sl
     LEFT JOIN accounts a ON sl.account_id = a.id
@@ -408,14 +428,14 @@ router.get('/api/links/export', requireAuth, (req, res) => {
   }
 
   const BOM = '﻿';
-  const header = '链接地址,账号,类型,有效期(小时),到期时间,使用次数,最大次数,状态,创建时间';
+  const header = '编号,链接地址,账号,类型,有效期(小时),到期时间,使用次数,最大次数,状态,创建时间';
   const rows = links.map(l => {
     const url = `https://yunpan.up.railway.app/s/${l.token}`;
     const type = l.is_pool === 1 ? '共享链接' : '独享链接';
     const isPending = l.first_used_at === null && l.status === 'active';
     const statusMap = { active: '有效', expired: '已过期', disabled: '已停用' };
     const statusName = isPending ? '待使用' : (statusMap[l.status] || l.status);
-    return [url, l.nickname || '', type, l.expire_hours, l.expire_at || '', l.use_count, l.max_uses || 20, statusName, l.created_at || '']
+    return [l.display_number || '', url, l.nickname || '', type, l.expire_hours, l.expire_at || '', l.use_count, l.max_uses || 20, statusName, l.created_at || '']
       .map(v => '"' + String(v).replace(/"/g, '""') + '"')
       .join(',');
   });
@@ -425,6 +445,17 @@ router.get('/api/links/export', requireAuth, (req, res) => {
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="links_export_${Date.now()}.csv"`);
   res.send(csv);
+});
+
+// API: 重置链接编号（按创建时间从1开始重新分配）
+router.post('/api/links/reset-numbers', requireAuth, (req, res) => {
+  const links = db.all('SELECT id FROM share_links ORDER BY created_at ASC');
+
+  for (let i = 0; i < links.length; i++) {
+    db.run('UPDATE share_links SET display_number = ? WHERE id = ?', [i + 1, links[i].id]);
+  }
+
+  res.json({ success: true, message: `已为 ${links.length} 条链接重新分配编号` });
 });
 
 // API: 账号池统计（仪表盘用）
