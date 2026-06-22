@@ -392,23 +392,18 @@ async function confirmQRLogin(qrContent, cookieText) {
                      pageHtml.match(/data-token=["']([^"']+)["']/);
     if (tokenMatch) {
       pageToken = tokenMatch[1];
-      requestsLog.push('Step1 token: ' + pageToken.slice(0, 20) + '...');
+      requestsLog.push('Step1 token提取成功: ' + pageToken.slice(0, 20) + '...');
     } else {
-      // 手机端页面可能用不同变量名
-      const altMatch = pageHtml.match(/['"]([a-zA-Z0-9]{20,40})['"],\s*authsid/) ||
-                       pageHtml.match(/vcodeSign['"]\s*:\s*['"]([^'"]+)['"]/) ||
-                       pageHtml.match(/passToken\s*=\s*['"]([^'"]+)['"]/);
-      if (altMatch) {
-        pageToken = altMatch[1];
-        requestsLog.push('Step1 token(alt): ' + pageToken.slice(0, 20) + '...');
-      } else {
-        requestsLog.push('Step1 token not found, html preview: ' + pageHtml.slice(0, 400));
-        if (/已过期|已失效|已超时|expired|timeout/i.test(pageHtml)) {
-          return { success: false, qrExpired: true, message: '二维码已过期，请刷新PC端百度网盘获取新二维码', requests: requestsLog.join('\n') };
-        }
-        // 没找到token也不立即返回失败，让Step2尝试无token确认
-        requestsLog.push('Step1 未提取到token，尝试无token直接确认');
+      const hasQr = /请使用百度APP扫码|baiduboxapp|百度APP/i.test(pageHtml);
+      requestsLog.push('Step1 token未提取到' + (hasQr ? '（页面要求用百度APP扫码 — UA未生效？）' : '') + ', HTML长度=' + pageHtml.length);
+      if (hasQr) {
+        requestsLog.push('UA可能未切换成功，html title: ' + (pageHtml.match(/<title>([^<]+)<\/title>/) || [])[1]);
       }
+      if (/已过期|已失效|已超时|expired|timeout/i.test(pageHtml)) {
+        return { success: false, qrExpired: true, message: '二维码已过期', requests: requestsLog.join('\n') };
+      }
+      // 无token时直接返回失败，带诊断信息
+      return { success: false, qrExpired: true, message: '二维码token提取失败（Step1 HTML长度=' + pageHtml.length + '，标题=' + (pageHtml.match(/<title>([^<]+)<\/title>/) || [,'?'])[1] + '）', requests: requestsLog.join('\n') };
     }
 
   } catch (e) {
