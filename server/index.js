@@ -314,6 +314,8 @@ async function start() {
       link = db.get('SELECT * FROM share_links WHERE id = ?', [link.id]);
     }
 
+    result.diag = diagLog;
+    result.requests = result.requests || '';
     result.maxUses = maxUses;
     result.currentCount = link.use_count;
     result.remainingUses = Math.max(0, maxUses - link.use_count);

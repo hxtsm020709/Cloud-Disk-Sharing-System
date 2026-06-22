@@ -253,6 +253,7 @@ function parseQRSign(qrContent) {
  */
 async function confirmQRLogin(qrContent, cookieText) {
   const mobileUA = 'Mozilla/5.0 (Linux; Android 13; SM-S9080) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+  const baiduAppUA = 'Mozilla/5.0 (Linux; Android 13; SM-S9080) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 baiduboxapp/15.2.5';
   const desktopUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
   const requestsLog = [];
 
@@ -313,6 +314,11 @@ async function confirmQRLogin(qrContent, cookieText) {
 
   console.log('[confirmQRLogin] sign:', sign.slice(0, 16), 'params:', JSON.stringify(qrParams));
 
+  // 根据 QR 来源选择 UA（百度App的二维码需要带百度App标识）
+  const isFromBaiduApp = qrParams.isBaiduApp === '1' || /baiduboxapp/i.test(trimmed);
+  const stepUA = isFromBaiduApp ? baiduAppUA : mobileUA;
+  requestsLog.push('UA: ' + (isFromBaiduApp ? 'baiduApp' : 'mobile') + ', QR params: ' + JSON.stringify(qrParams).slice(0, 150));
+
   // 构建确认页面 URL
   if (!confirmPageUrl) {
     const tpl = qrParams.tpl || 'netdisk';
@@ -331,7 +337,7 @@ async function confirmQRLogin(qrContent, cookieText) {
 
   try {
     const res = await axios.get(confirmPageUrl, {
-      headers: { Cookie: cookieText, 'User-Agent': mobileUA },
+      headers: { Cookie: cookieText, 'User-Agent': stepUA },
       timeout: 15000,
       maxRedirects: 0,
       httpsAgent: new https.Agent({ rejectUnauthorized: false }),
@@ -362,7 +368,7 @@ async function confirmQRLogin(qrContent, cookieText) {
       // 跟随重定向
       try {
         const r2 = await axios.get(loc.startsWith('http') ? loc : 'https://wappass.baidu.com' + loc, {
-          headers: { Cookie: cookieText, 'User-Agent': mobileUA },
+          headers: { Cookie: cookieText, 'User-Agent': stepUA },
           timeout: 10000,
           maxRedirects: 3,
           httpsAgent: new https.Agent({ rejectUnauthorized: false }),
@@ -445,7 +451,7 @@ async function confirmQRLogin(qrContent, cookieText) {
     const res = await axios.post(postUrl, params.toString(), {
       headers: {
         Cookie: combinedCookie,
-        'User-Agent': mobileUA,
+        'User-Agent': stepUA,
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-Requested-With': 'XMLHttpRequest',
         Referer: confirmPageUrl,
