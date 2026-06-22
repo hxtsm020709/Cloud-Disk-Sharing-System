@@ -114,6 +114,32 @@ async function start() {
 
     let account = db.get('SELECT * FROM accounts WHERE id = ? AND is_deleted = 0', [link.account_id]);
 
+    // 共享链接打开时，若账号已停用/Cookie过期，立即按SVIP优先切换
+    if (link.is_pool === 1 && link.status === 'active' && account && (account.is_paused === 1 || account.cookie_status === 'expired')) {
+      const { checkCookieValid } = require('./services/baidu-auth');
+      const { decrypt } = require('./utils/crypto');
+      const vipRank = { 'svip': 0, 'vip': 1, 'normal': 2 };
+
+      const candidates = db.all('SELECT * FROM accounts WHERE is_deleted = 0 AND is_paused = 0 AND id != ?', [account.id]);
+      candidates.sort((a, b) => (vipRank[a.vip_type] ?? 3) - (vipRank[b.vip_type] ?? 3));
+
+      for (const acc of candidates) {
+        try {
+          const testCookie = decrypt(acc.cookie_encrypted);
+          const validCheck = await checkCookieValid(testCookie);
+          if (validCheck.valid) {
+            const vip = validCheck.vipType || acc.vip_type;
+            db.run('UPDATE accounts SET cookie_status=\'valid\', vip_type=?, cookie_updated_at=datetime(\'now\',\'localtime\') WHERE id=?', [vip, acc.id]);
+            db.run('UPDATE share_links SET account_id = ? WHERE id = ?', [acc.id, link.id]);
+            account = acc;
+            link.account_id = acc.id;
+            console.log(`[scan-page] 链接#${link.display_number || link.id} 自动切换至${vip?.toUpperCase() || '?'}账号: ${acc.nickname}`);
+            break;
+          }
+        } catch(e) { /* skip */ }
+      }
+    }
+
     let statusText = '正常';
     let statusClass = 'dot-green';
     if (account && account.is_paused === 1) {
