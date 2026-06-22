@@ -19,12 +19,12 @@
     "express": "^5.2.1",
     "express-ejs-layouts": "^2.5.1",
     "express-session": "^1.19.0",
+    "jimp": "^1.6.1",
     "node-cron": "^4.2.1",
+    "qrcode-reader": "^1.0.4",
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
-    "jimp": "^1.6.1",
-    "nodemon": "^3.1.14",
-    "qrcode-reader": "^1.0.4"
+    "nodemon": "^3.1.14"
   }
 }
