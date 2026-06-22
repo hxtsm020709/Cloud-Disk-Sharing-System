@@ -314,10 +314,8 @@ async function confirmQRLogin(qrContent, cookieText) {
 
   console.log('[confirmQRLogin] sign:', sign.slice(0, 16), 'params:', JSON.stringify(qrParams));
 
-  // 根据 QR 来源选择 UA（百度App的二维码需要带百度App标识）
-  const isFromBaiduApp = qrParams.isBaiduApp === '1' || /baiduboxapp/i.test(trimmed);
-  const stepUA = isFromBaiduApp ? baiduAppUA : mobileUA;
-  requestsLog.push('UA: ' + (isFromBaiduApp ? 'baiduApp' : 'mobile') + ', QR params: ' + JSON.stringify(qrParams).slice(0, 150));
+  // Step1用桌面UA获取token页面，Step2用移动UA确认（手机端登录也统一用此策略）
+  requestsLog.push('QR params: ' + JSON.stringify(qrParams).slice(0, 150));
 
   // 构建确认页面 URL
   if (!confirmPageUrl) {
@@ -337,7 +335,7 @@ async function confirmQRLogin(qrContent, cookieText) {
 
   try {
     const res = await axios.get(confirmPageUrl, {
-      headers: { Cookie: cookieText, 'User-Agent': stepUA },
+      headers: { Cookie: cookieText, 'User-Agent': desktopUA },
       timeout: 15000,
       maxRedirects: 0,
       httpsAgent: new https.Agent({ rejectUnauthorized: false }),
@@ -368,7 +366,7 @@ async function confirmQRLogin(qrContent, cookieText) {
       // 跟随重定向
       try {
         const r2 = await axios.get(loc.startsWith('http') ? loc : 'https://wappass.baidu.com' + loc, {
-          headers: { Cookie: cookieText, 'User-Agent': stepUA },
+          headers: { Cookie: cookieText, 'User-Agent': desktopUA },
           timeout: 10000,
           maxRedirects: 3,
           httpsAgent: new https.Agent({ rejectUnauthorized: false }),
@@ -460,7 +458,7 @@ async function confirmQRLogin(qrContent, cookieText) {
     const res = await axios.post(postUrl, params.toString(), {
       headers: {
         Cookie: combinedCookie,
-        'User-Agent': stepUA,
+        'User-Agent': mobileUA,
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-Requested-With': 'XMLHttpRequest',
         Referer: confirmPageUrl,
