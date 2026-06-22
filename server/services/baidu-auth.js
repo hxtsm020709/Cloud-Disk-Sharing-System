@@ -10,7 +10,7 @@ async function decodeQRFromBase64(dataUrl) {
     const buffer = Buffer.from(base64Data, 'base64');
     const image = await Jimp.read(buffer);
     // 转灰度提高识别率
-    image.grayscale().contrast(0.5);
+    image.grayscale();
 
     return new Promise((resolve, reject) => {
       const qr = new QrCode();
