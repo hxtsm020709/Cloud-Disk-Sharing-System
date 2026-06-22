@@ -387,17 +387,29 @@ async function confirmQRLogin(qrContent, cookieText) {
     }
 
     // 提取页面 token（兼容PC端和手机端不同页面格式）
-    const tokenMatch = pageHtml.match(/token:\s*'([^']+)'/) ||
-                       pageHtml.match(/token:\s*"([^"]+)"/) ||
-                       pageHtml.match(/token[=:]\s*([a-zA-Z0-9]{10,})/) ||
-                       pageHtml.match(/data-token=["']([^"']+)["']/);
+    let tokenMatch = pageHtml.match(/token:\s*'([^']+)'/) ||
+                     pageHtml.match(/token:\s*"([^"]+)"/) ||
+                     pageHtml.match(/token:\s*([a-zA-Z0-9]{15,})/) ||
+                     pageHtml.match(/token[=:]\s*([a-zA-Z0-9]{10,})/) ||
+                     pageHtml.match(/data-token=["']([^"']+)["']/);
     if (tokenMatch) {
       pageToken = tokenMatch[1];
       requestsLog.push('Step1 token: ' + pageToken.slice(0, 20) + '...');
     } else {
-      requestsLog.push('Step1 token not found in page, html: ' + pageHtml.slice(0, 200));
-      if (/已过期|已失效|已超时|expired|timeout/i.test(pageHtml)) {
-        return { success: false, qrExpired: true, message: '二维码已过期，请刷新PC端百度网盘获取新二维码', requests: requestsLog.join('\n') };
+      // 手机端页面可能用不同变量名
+      const altMatch = pageHtml.match(/['"]([a-zA-Z0-9]{20,40})['"],\s*authsid/) ||
+                       pageHtml.match(/vcodeSign['"]\s*:\s*['"]([^'"]+)['"]/) ||
+                       pageHtml.match(/passToken\s*=\s*['"]([^'"]+)['"]/);
+      if (altMatch) {
+        pageToken = altMatch[1];
+        requestsLog.push('Step1 token(alt): ' + pageToken.slice(0, 20) + '...');
+      } else {
+        requestsLog.push('Step1 token not found, html preview: ' + pageHtml.slice(0, 400));
+        if (/已过期|已失效|已超时|expired|timeout/i.test(pageHtml)) {
+          return { success: false, qrExpired: true, message: '二维码已过期，请刷新PC端百度网盘获取新二维码', requests: requestsLog.join('\n') };
+        }
+        // 没找到token也不立即返回失败，让Step2尝试无token确认
+        requestsLog.push('Step1 未提取到token，尝试无token直接确认');
       }
     }
 
@@ -406,12 +418,9 @@ async function confirmQRLogin(qrContent, cookieText) {
     return { success: false, message: '访问确认页面失败', requests: requestsLog.join('\n') };
   }
 
+  // 无token也继续Step2（手机端可能不需要提取token）
   if (!pageToken) {
-    // 额外检查：token 没找到但页面正常 → 大概率 QR 过期
-    if (/已过期|已失效|已超时|expired|timeout|二维码.*(过期|失效|超时)/i.test(pageHtml)) {
-      return { success: false, qrExpired: true, message: '二维码已过期，请刷新PC端百度网盘获取新二维码', requests: requestsLog.join('\n') };
-    }
-    return { success: false, qrExpired: true, message: '未获取到确认token（二维码页面格式不匹配或已过期）', requests: requestsLog.join('\n') };
+    requestsLog.push('Step1 无token，尝试直接POST确认');
   }
 
   // ====== Step 2: POST 确认登录（VIP Cookie + 会话 Cookie 合并回传） ======
