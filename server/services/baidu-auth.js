@@ -292,7 +292,10 @@ async function confirmQRLogin(qrContent, cookieText) {
   try {
     const urlObj = new URL(trimmed);
     sign = urlObj.searchParams.get('sign') || '';
-    for (const key of ['sign', 'tpl', 'apiver', 'cmd', 'bd_page_type', 'qrloginfrom', 'lp', 'client']) {
+    // 提取所有 QR 参数原样回传（PC/手机端参数不同，不能硬编码）
+    const paramKeys = ['sign', 'tpl', 'apiver', 'cmd', 'bd_page_type', 'qrloginfrom', 'lp', 'client',
+      'isBaiduApp', 'adapter', 'callback', 'loginProxy', 'loginfor', 'type', 'qrsign'];
+    for (const key of paramKeys) {
       const v = urlObj.searchParams.get(key);
       if (v) qrParams[key] = v;
     }
@@ -414,18 +417,21 @@ async function confirmQRLogin(qrContent, cookieText) {
     sign: sign,
     client: qrParams.client || '',
     offline: '0',
-    adapter: '',
+    adapter: qrParams.adapter || '',
     clientfrom: '',
     skin: '',
     liveAbility: '',
     suppcheck: '',
-    isBaiduApp: '0',
+    isBaiduApp: qrParams.isBaiduApp || '0',
     qrloginfrom: qrParams.qrloginfrom || '',
+    callback: qrParams.callback || '',
+    loginProxy: qrParams.loginProxy || '',
     redirectU: '',
     jumpurl: '',
     zid: '',
     isAuthed: '0',
     bd_page_type: qrParams.bd_page_type || '',
+    loginfor: qrParams.loginfor || '',
   };
 
   // 合并 Cookie：VIP Cookie + Step1 返回的会话 Cookie
@@ -447,10 +453,19 @@ async function confirmQRLogin(qrContent, cookieText) {
       httpsAgent: new https.Agent({ rejectUnauthorized: false }),
     });
 
+    const rawBody = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
     const data = typeof res.data === 'string' ? (() => { try { return JSON.parse(res.data); } catch { return res.data; } })() : res.data;
-    requestsLog.push('Step2 POST → HTTP' + res.status + ', response: ' + JSON.stringify(data).slice(0, 200));
+    requestsLog.push('Step2 POST → HTTP' + res.status + ', response: ' + rawBody.slice(0, 300));
 
-    const errno = parseInt(data?.errInfo?.no ?? data?.errno);
+    // 字符串响应直接匹配成功标记
+    if (typeof data === 'string') {
+      if (/errno=0|"errno":0|"no":0|loginok|登录成功/i.test(data)) {
+        return { success: true, message: '登录成功', requests: requestsLog.join('\n') };
+      }
+      return { success: false, message: '确认响应异常，请重试', requests: requestsLog.join('\n') };
+    }
+
+    const errno = parseInt(data?.errInfo?.no ?? data?.errno ?? data?.code);
     if (errno === 0) {
       return { success: true, message: '登录确认成功', requests: requestsLog.join('\n') };
     }
@@ -472,7 +487,9 @@ async function confirmQRLogin(qrContent, cookieText) {
       return { success: true, message: '登录成功', requests: requestsLog.join('\n') };
     }
 
-    return { success: true, message: '已发送确认请求', requests: requestsLog.join('\n') };
+    // 未匹配到明确成功标记，记录原始响应并返回失败
+    requestsLog.push('Step2 unexpected response, raw: ' + JSON.stringify(data).slice(0, 300));
+    return { success: false, message: '确认响应异常，请重试', requests: requestsLog.join('\n') };
   } catch (e) {
     const loc = e.response?.headers?.location || '';
     const status = e.response?.status || '?';
