@@ -1,58 +1,6 @@
 const axios = require('axios');
 const https = require('https');
 
-// 服务端解码base64图片中的二维码（多种策略）
-async function decodeQRFromBase64(dataUrl) {
-  const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
-  const buffer = Buffer.from(base64Data, 'base64');
-
-  // 策略1: jsQR + jimp
-  try {
-    const Jimp = require('jimp');
-    const jsQR = require('jsqr');
-    const image = await Jimp.read(buffer);
-    image.grayscale();
-
-    const w = image.bitmap.width;
-    const h = image.bitmap.height;
-    if (w === 0 || h === 0) throw new Error('zero-size image');
-
-    const rgba = new Uint8ClampedArray(image.bitmap.data);
-    const code = jsQR(rgba, w, h, { inversionAttempts: 'attemptBoth' });
-    if (code) { console.log('[qr-decode] jsQR:', code.data.slice(0,80)); return code.data; }
-
-    if (w > 500 || h > 500) {
-      image.resize(Math.floor(w * 0.5), Math.floor(h * 0.5));
-      const r2 = new Uint8ClampedArray(image.bitmap.data);
-      const code2 = jsQR(r2, image.bitmap.width, image.bitmap.height, { inversionAttempts: 'attemptBoth' });
-      if (code2) { console.log('[qr-decode] jsQR(scaled):', code2.data.slice(0,80)); return code2.data; }
-    }
-    console.log('[qr-decode] jsQR failed');
-  } catch(e) { console.log('[qr-decode] jsQR error:', e.message); }
-
-  // 策略2: 上传到 qrserver API 解码
-  try {
-    const FormData = require('form-data');
-    const form = new FormData();
-    form.append('file', buffer, { filename: 'qr.png', contentType: 'image/png' });
-    const res = await client.post('https://api.qrserver.com/v1/read-qr-code/', form, {
-      headers: form.getHeaders(),
-      timeout: 15000,
-    });
-    const result = res.data;
-    console.log('[qr-decode] qrserver:', JSON.stringify(result).slice(0,200));
-    if (Array.isArray(result) && result[0]?.symbol?.[0]?.data) {
-      const decoded = result[0].symbol[0].data;
-      if (decoded && decoded !== 'null') {
-        console.log('[qr-decode] qrserver success:', decoded.slice(0,80));
-        return decoded;
-      }
-    }
-  } catch(e) { console.log('[qr-decode] qrserver error:', e.message); }
-
-  return null;
-}
-
 // 模拟真实浏览器的请求实例
 const client = axios.create({
   timeout: 15000,
@@ -303,10 +251,8 @@ function parseQRSign(qrContent) {
  * 关键：Step1 GET 返回的 Set-Cookie（会话 Cookie）必须在 Step2 POST 中回传，
  * 否则百度会因缺少会话凭证而触发 400023（需要验证后登录）。
  */
-async function confirmQRLogin(qrContent, cookieText, _depth = 0) {
-  if (_depth > 2) return { success: false, message: '二维码嵌套过深，请使用PC端百度网盘二维码', requests: '' };
+async function confirmQRLogin(qrContent, cookieText) {
   const mobileUA = 'Mozilla/5.0 (Linux; Android 13; SM-S9080) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
-  const baiduAppUA = 'Mozilla/5.0 (Linux; Android 13; SM-S9080) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 baiduboxapp/15.2.5';
   const desktopUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
   const requestsLog = [];
 
@@ -353,15 +299,8 @@ async function confirmQRLogin(qrContent, cookieText, _depth = 0) {
       const v = urlObj.searchParams.get(key);
       if (v) qrParams[key] = v;
     }
-    // 用QR原始URL但去掉qrloginfrom=native（否则Baidu返回扫码页而非token页面）
     if (urlObj.hostname === 'wappass.baidu.com' && urlObj.pathname === '/wp/') {
-      if (urlObj.searchParams.get('qrloginfrom') === 'native') {
-        const cleaned = new URL(trimmed);
-        cleaned.searchParams.delete('qrloginfrom');
-        confirmPageUrl = cleaned.toString();
-      } else {
-        confirmPageUrl = trimmed;
-      }
+      confirmPageUrl = trimmed;
     }
   } catch {
     const signMatch = qrContent.match(/sign=([^&]+)/);
@@ -454,31 +393,10 @@ async function confirmQRLogin(qrContent, cookieText, _depth = 0) {
       pageToken = tokenMatch[1];
       requestsLog.push('Step1 token提取成功: ' + pageToken.slice(0, 20) + '...');
     } else {
-      const hasQr = /请使用百度APP扫码|baiduboxapp|百度APP/i.test(pageHtml);
-      requestsLog.push('Step1 token未提取到' + (hasQr ? '（页面要求用百度APP扫码 — UA未生效？）' : '') + ', HTML长度=' + pageHtml.length);
-      if (hasQr) {
-        requestsLog.push('UA可能未切换成功，html title: ' + (pageHtml.match(/<title>([^<]+)<\/title>/) || [])[1]);
-      }
+      requestsLog.push('Step1 token未提取到, HTML长度=' + pageHtml.length);
       if (/已过期|已失效|已超时|expired|timeout/i.test(pageHtml)) {
         return { success: false, qrExpired: true, message: '二维码已过期', requests: requestsLog.join('\n') };
       }
-      // 无token（native app二维码）— 尝试提取页面中内嵌的base64二维码并解码
-      const qrImgMatch = pageHtml.match(/data:image\/png;base64,([A-Za-z0-9+/=]+)/);
-      if (qrImgMatch) {
-        const innerQrB64 = qrImgMatch[0];
-        requestsLog.push('Step1: 提取到内嵌二维码base64(' + qrImgMatch[1].length + 'B)，服务端解码');
-        const decodedUrl = await decodeQRFromBase64(innerQrB64);
-        if (decodedUrl) {
-          requestsLog.push('Step1: 内嵌二维码解码成功: ' + decodedUrl.slice(0, 80));
-          // 用解码出的URL重新走确认流程
-          console.log('[confirmQRLogin] Inner QR decoded, recursing with:', decodedUrl.slice(0, 80));
-          return await confirmQRLogin(decodedUrl, cookieText, _depth + 1);
-        }
-        requestsLog.push('Step1: 内嵌二维码解码失败');
-        return { success: false, qrExpired: true, innerQr: innerQrB64, message: '内嵌二维码解码失败', requests: requestsLog.join('\n') };
-      }
-      requestsLog.push('Step1: 未找到内嵌base64二维码图片');
-      // 回退：无token直接POST
     }
 
   } catch (e) {
@@ -486,9 +404,8 @@ async function confirmQRLogin(qrContent, cookieText, _depth = 0) {
     return { success: false, message: '访问确认页面失败', requests: requestsLog.join('\n') };
   }
 
-  // Step 1 未提取到 token — 手机端页面 JS 动态渲染，跳过页面直接POST确认
   if (!pageToken) {
-    requestsLog.push('Step1 无token，尝试直接POST（跳过页面token提取）');
+    return { success: false, qrExpired: true, message: '未获取到确认token，请使用PC端百度网盘二维码', requests: requestsLog.join('\n') };
   }
 
   // ====== Step 2: POST 确认登录（VIP Cookie + 会话 Cookie 合并回传） ======

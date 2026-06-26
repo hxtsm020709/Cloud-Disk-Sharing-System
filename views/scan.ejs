@@ -706,21 +706,6 @@ async function doConfirm() {
     });
     var data = await res.json();
 
-    // 内嵌二维码（native app）→ 前端解码后重新确认
-    if (data.innerQr) {
-      document.getElementById('scannerStatus').innerHTML = '<span style="color:#FAAD14;">正在解码内嵌二维码...（图片大小=' + data.innerQr.length + 'B）</span>';
-      var innerContent = await decodeBase64Qr(data.innerQr);
-      if (innerContent) {
-        capturedQR = innerContent;
-        document.getElementById('scannerStatus').innerHTML = '<span style="color:#FAAD14;">已解码内嵌QR内容: ' + innerContent.slice(0, 80) + '...，正在确认登录</span>';
-        await doConfirm();
-        return;
-      }
-      document.getElementById('scannerStatus').innerHTML = '<span style="color:#FF4D4F;">内嵌二维码解码失败（图片数据长度=' + (data.innerQr ? data.innerQr.length : 0) + '），请使用PC端百度网盘二维码</span>';
-      document.getElementById('scannerActions').innerHTML = '<button class="retry-btn" onclick="resetScan()">重新扫描</button>';
-      return;
-    }
-
     if (data.success) {
       var extra = data.rotated ? ' (已切换备用账号: ' + data.rotatedTo + ')' : '';
       var usedInfo = data.remainingUses !== undefined ? '<br><small style="color:#999;">已用次数：' + (data.maxUses - data.remainingUses) + ' / ' + data.maxUses + ' 次</small>' : '';
@@ -829,44 +814,6 @@ function resetScreenshot() {
   confirming = false;
   document.getElementById('uploadStatus').textContent = '';
   document.getElementById('fileInput').value = '';
-}
-
-// 解码base64内嵌二维码
-function decodeBase64Qr(dataUrl) {
-  return new Promise(function(resolve) {
-    var img = new Image();
-    img.onload = function() {
-      console.log('innerQR image loaded: ' + img.width + 'x' + img.height);
-      var c = document.createElement('canvas');
-      c.width = img.width; c.height = img.height;
-      var ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
-      var id = ctx.getImageData(0, 0, img.width, img.height);
-      try {
-        // 先尝试直解，失败后尝试反转+缩放
-        var code = jsQR(id.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
-        if (!code && (img.width > 500 || img.height > 500)) {
-          // 图片太大，缩放后重试
-          var scale = Math.min(500 / img.width, 500 / img.height);
-          var sc = document.createElement('canvas');
-          sc.width = Math.floor(img.width * scale);
-          sc.height = Math.floor(img.height * scale);
-          var sctx = sc.getContext('2d'); sctx.drawImage(img, 0, 0, sc.width, sc.height);
-          var sid = sctx.getImageData(0, 0, sc.width, sc.height);
-          code = jsQR(sid.data, sc.width, sc.height, { inversionAttempts: 'attemptBoth' });
-        }
-        console.log('innerQR decode result: ' + (code ? code.data.slice(0,50) : 'null'));
-        resolve(code ? code.data : null);
-      } catch(e) {
-        console.log('innerQR decode error: ' + e.message);
-        resolve(null);
-      }
-    };
-    img.onerror = function(e) {
-      console.log('innerQR image load error: ' + (e.message || 'unknown'));
-      resolve(null);
-    };
-    img.src = dataUrl;
-  });
 }
 </script>
 </body>
