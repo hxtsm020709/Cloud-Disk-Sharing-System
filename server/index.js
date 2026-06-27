@@ -241,19 +241,18 @@ async function start() {
 
     const diagLog = []; // 收集诊断信息返回前端
 
-    if (!result.success && link.is_pool === 1) {
-      const isVerifyBlock = result.errno === 400023;
-      const isQrExpired = result.qrExpired === true;
-      const isQrRelated = /二维码|qr.*(过期|失效|超时|expired|invalid|timeout|token)/i.test(result.message || '');
-      const shouldMarkExpired = !isVerifyBlock && !isQrExpired && !isQrRelated;
-
+    if (!result.success) {
       diagLog.push(`${account.nickname}: ${result.message?.slice(0,80)}`);
-
-      if (shouldMarkExpired) {
+      // 只有明确重定向到passport登录页才是Cookie过期，其余不标记
+      const isCookieExpired = /Cookie已失效|passport.*login|Cookie 已失效/i.test(result.message || '') ||
+        (result.errno === 400023);
+      if (isCookieExpired) {
         db.run(`UPDATE accounts SET cookie_status='expired', cookie_updated_at=datetime('now','localtime') WHERE id=?`, [account.id]);
       }
+    }
 
-      console.log(`[confirm] 登录失败${isVerifyBlock ? '(验证拦截)' : isQrExpired ? '(QR过期)' : isQrRelated ? '(QR问题)' : ''}，尝试切换SVIP备用账号...`);
+    if (!result.success && link.is_pool === 1) {
+      console.log(`[confirm] 登录失败，尝试切换SVIP备用账号...`);
 
       const allAccounts = db.all('SELECT * FROM accounts WHERE is_deleted = 0 AND is_paused = 0 AND id != ?', [link.account_id]);
       // SVIP > VIP > 普通 优先排序
@@ -280,11 +279,7 @@ async function start() {
               break;
             }
             diagLog.push(`${acc.nickname}: ${fbResult.message?.slice(0,80)}`);
-            // 仅非QR问题才标记Cookie过期
-            const fbIsQr = /二维码|qr.*(过期|失效|超时|expired|invalid|timeout|token)/i.test(fbResult.message || '') || fbResult.qrExpired;
-            if (!fbIsQr && fbResult.errno !== 400023) {
-              db.run(`UPDATE accounts SET cookie_status='expired', cookie_updated_at=datetime('now','localtime') WHERE id=?`, [acc.id]);
-            }
+            // 备用切换失败绝不标记Cookie过期（可能是QR问题）
           } else {
             diagLog.push(`${acc.nickname}: Cookie过期`);
             db.run(`UPDATE accounts SET cookie_status='expired', cookie_updated_at=datetime('now','localtime') WHERE id=?`, [acc.id]);
