@@ -340,6 +340,86 @@ async function start() {
     res.json(result);
   });
 
+  // ====== 网盘代理：注入VIP Cookie访问pan.baidu.com ======
+  const axios = require('axios');
+
+  app.all('/p/:token/*', async (req, res) => {
+    const db = require('./database');
+    const { decrypt } = require('./utils/crypto');
+
+    const link = db.get(
+      "SELECT * FROM share_links WHERE token = ? AND status = 'active' AND (first_used_at IS NULL OR expire_at > datetime('now', 'localtime'))",
+      [req.params.token]
+    );
+    if (!link) return res.status(404).send('链接已失效');
+
+    const account = db.get('SELECT * FROM accounts WHERE id = ? AND is_deleted = 0 AND is_paused = 0', [link.account_id]);
+    if (!account) return res.status(404).send('账号不可用');
+
+    let cookieText;
+    try { cookieText = decrypt(account.cookie_encrypted); }
+    catch (e) { return res.status(500).send('Cookie 解密失败'); }
+
+    const subPath = req.params[0] || '';
+    const targetUrl = 'https://pan.baidu.com/' + subPath + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '');
+
+    try {
+      const proxyRes = await axios({
+        method: req.method,
+        url: targetUrl,
+        headers: {
+          Cookie: cookieText,
+          'User-Agent': req.get('user-agent') || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': req.get('accept') || '*/*',
+          'Accept-Language': req.get('accept-language') || 'zh-CN,zh;q=0.9',
+          'Referer': 'https://pan.baidu.com/',
+        },
+        data: req.method !== 'GET' ? req.body : undefined,
+        responseType: 'arraybuffer',
+        timeout: 30000,
+        maxRedirects: 0,
+        validateStatus: s => s >= 200 && s < 500,
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+      });
+
+      // 转发响应头
+      const ct = proxyRes.headers['content-type'] || '';
+      if (ct) res.set('Content-Type', ct);
+
+      // HTML响应 — 重写URL保持代理
+      let body = proxyRes.data;
+      if (ct.includes('text/html') || ct.includes('application/xhtml')) {
+        body = Buffer.from(body).toString('utf-8');
+        // 重写关键URL
+        const proxyBase = '/p/' + req.params.token + '/';
+        body = body
+          .replace(/href="\/api\//g, 'href="' + proxyBase + 'api/')
+          .replace(/src="\/api\//g, 'src="' + proxyBase + 'api/')
+          .replace(/href="\/disk\//g, 'href="' + proxyBase + 'disk/')
+          .replace(/src="\/disk\//g, 'src="' + proxyBase + 'disk/')
+          .replace(/href="\/rest\//g, 'href="' + proxyBase + 'rest/')
+          .replace(/src="\/rest\//g, 'src="' + proxyBase + 'rest/')
+          .replace(/href="\/wp\//g, 'href="' + proxyBase + 'wp/')
+          .replace(/src="\/wp\//g, 'src="' + proxyBase + 'wp/')
+          .replace(/href="\/res\//g, 'href="' + proxyBase + 'res/')
+          .replace(/src="\/res\//g, 'src="' + proxyBase + 'res/')
+          .replace(/href="\/s\//g, 'href="' + proxyBase + 's/')
+          .replace(/src="\/s\//g, 'src="' + proxyBase + 's/')
+          // 也处理绝对URL指向pan.baidu.com
+          .replace(/https?:\/\/pan\.baidu\.com\//g, proxyBase)
+          // CSS url()
+          .replace(/url\(\s*['"]?\/api\//g, 'url(' + proxyBase + 'api/')
+          .replace(/url\(\s*['"]?\/res\//g, 'url(' + proxyBase + 'res/');
+        body = Buffer.from(body);
+      }
+
+      res.status(proxyRes.status).send(body);
+    } catch (e) {
+      console.error('[proxy] error:', e.message?.slice(0, 100));
+      res.status(502).send('代理请求失败: ' + (e.message?.slice(0, 200) || ''));
+    }
+  });
+
   // 首页（用户侧默认页面）
   app.get('/', (req, res) => {
     res.render('home', { layout: false });
