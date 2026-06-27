@@ -486,6 +486,14 @@ async function confirmQRLogin(qrContent, cookieText) {
     }
     if (!isNaN(errno)) {
       let msg = data?.errInfo?.msg || data?.errmsg || '';
+      if (errno === 119998) {
+        // 系统错误 — 尝试从响应中提取回调URL让前端跳转
+        const fallbackUrl = data?.data?.u || '';
+        requestsLog.push('errno=119998, fallback URL: ' + fallbackUrl.slice(0, 200));
+        if (fallbackUrl) {
+          return { success: false, errno: 119998, redirectUrl: fallbackUrl, message: '请跳转至Baidu完成登录', requests: requestsLog.join('\n') };
+        }
+      }
       if (errno === 400023) {
         let diagHint = '';
         if (!hasBDUSS) diagHint = ' [Cookie缺少BDUSS，需重新提取]';
