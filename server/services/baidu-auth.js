@@ -338,7 +338,7 @@ async function confirmQRLogin(qrContent, cookieText) {
 
   try {
     const res = await axios.get(confirmPageUrl, {
-      headers: { Cookie: cookieText, 'User-Agent': desktopUA },
+      headers: { Cookie: cookieText, 'User-Agent': mobileUA },
       timeout: 15000,
       maxRedirects: 0,
       httpsAgent: new https.Agent({ rejectUnauthorized: false }),
@@ -369,7 +369,7 @@ async function confirmQRLogin(qrContent, cookieText) {
       // 跟随重定向
       try {
         const r2 = await axios.get(loc.startsWith('http') ? loc : 'https://wappass.baidu.com' + loc, {
-          headers: { Cookie: cookieText, 'User-Agent': desktopUA },
+          headers: { Cookie: cookieText, 'User-Agent': mobileUA },
           timeout: 10000,
           maxRedirects: 3,
           httpsAgent: new https.Agent({ rejectUnauthorized: false }),
