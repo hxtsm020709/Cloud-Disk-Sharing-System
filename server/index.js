@@ -343,7 +343,7 @@ async function start() {
   // ====== 网盘代理：注入VIP Cookie访问pan.baidu.com ======
   const axios = require('axios');
 
-  app.all('/p/:token/*', async (req, res) => {
+  app.use('/p/:token', async (req, res) => {
     const db = require('./database');
     const { decrypt } = require('./utils/crypto');
 
@@ -360,8 +360,9 @@ async function start() {
     try { cookieText = decrypt(account.cookie_encrypted); }
     catch (e) { return res.status(500).send('Cookie 解密失败'); }
 
-    const subPath = req.params[0] || '';
-    const targetUrl = 'https://pan.baidu.com/' + subPath + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '');
+    const subPath = (req.path || '').replace(/^\//, '');
+    const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+    const targetUrl = 'https://pan.baidu.com/' + subPath + query;
 
     try {
       const proxyRes = await axios({
