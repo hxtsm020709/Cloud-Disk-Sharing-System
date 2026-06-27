@@ -409,6 +409,13 @@ async function confirmQRLogin(qrContent, cookieText) {
   }
 
   if (!pageToken) {
+    // 手机端native QR — 提取页面中内嵌的base64二维码返回前端，让用户用百度App扫码
+    const qrImgMatch = pageHtml.match(/data:image\/png;base64,([A-Za-z0-9+/=]{100,})/);
+    if (qrImgMatch) {
+      const innerQr = qrImgMatch[0];
+      requestsLog.push('Step1 返回内嵌二维码(' + qrImgMatch[1].length + 'B)供前端展示');
+      return { success: false, innerQr: innerQr, message: '请使用百度APP扫描下方二维码完成登录', requests: requestsLog.join('\n') };
+    }
     return { success: false, qrExpired: true, message: '未获取到确认token，请使用PC端百度网盘二维码', requests: requestsLog.join('\n') };
   }
 

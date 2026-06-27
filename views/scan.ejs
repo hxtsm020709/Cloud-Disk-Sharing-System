@@ -706,6 +706,19 @@ async function doConfirm() {
     });
     var data = await res.json();
 
+    // 手机端native QR → 显示内嵌二维码让用户用百度App扫
+    if (data.innerQr) {
+      document.getElementById('scannerStatus').innerHTML =
+        '<span style="color:#FAAD14;">手机端扫码 — 请用<strong>百度APP</strong>扫描下方二维码</span>';
+      document.getElementById('scannerActions').innerHTML =
+        '<div style="text-align:center;padding:10px;">' +
+        '<img src="' + data.innerQr + '" style="max-width:240px;border-radius:8px;border:2px solid #E8E8E8;">' +
+        '<p style="color:#999;font-size:13px;margin-top:10px;">打开<strong>百度APP</strong> → 扫一扫 → 扫描上方二维码</p>' +
+        '<button class="retry-btn" onclick="resetScan()" style="margin-top:8px;">重新扫描</button>' +
+        '</div>';
+      return;
+    }
+
     if (data.success) {
       var extra = data.rotated ? ' (已切换备用账号: ' + data.rotatedTo + ')' : '';
       var usedInfo = data.remainingUses !== undefined ? '<br><small style="color:#999;">已用次数：' + (data.maxUses - data.remainingUses) + ' / ' + data.maxUses + ' 次</small>' : '';
@@ -744,6 +757,14 @@ async function doConfirmScreenshot() {
       body: JSON.stringify({ qrContent: capturedQR }),
     });
     var data = await res.json();
+    if (data.innerQr) {
+      el.innerHTML = '<span style="color:#FAAD14;">手机端扫码 — 请用<strong>百度APP</strong>扫描下方二维码</span>' +
+        '<div style="text-align:center;padding:10px;">' +
+        '<img src="' + data.innerQr + '" style="max-width:240px;border-radius:8px;border:2px solid #E8E8E8;">' +
+        '<p style="color:#999;font-size:13px;margin-top:10px;">打开<strong>百度APP</strong> → 扫一扫 → 扫描上方二维码</p>' +
+        '</div>';
+      return;
+    }
     if (data.success) {
       var extra = data.rotated ? ' (已切换备用账号: ' + data.rotatedTo + ')' : '';
       var usedInfo = data.remainingUses !== undefined ? '<br><small style="color:#999;">已用次数：' + (data.maxUses - data.remainingUses) + ' / ' + data.maxUses + ' 次</small>' : '';
