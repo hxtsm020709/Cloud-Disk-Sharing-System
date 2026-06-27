@@ -252,6 +252,9 @@ async function start() {
     }
 
     if (!result.success && link.is_pool === 1) {
+      const isVerifyBlock = result.errno === 400023;
+      const isQrExpired = result.qrExpired === true;
+
       console.log(`[confirm] 登录失败，尝试切换SVIP备用账号...`);
 
       const allAccounts = db.all('SELECT * FROM accounts WHERE is_deleted = 0 AND is_paused = 0 AND id != ?', [link.account_id]);
@@ -292,7 +295,7 @@ async function start() {
         result.rotatedTo = account.nickname;
       } else if (!result.success) {
         result.fallbackExhausted = true;
-        if (isQrExpired || isQrRelated) {
+        if (isQrExpired) {
           result.message = '二维码已过期，请刷新PC端百度网盘登录页面获取新二维码后重新扫码';
         } else if (isVerifyBlock) {
           result.message = '系统维护中，请稍后再试。如多次出现请于产品购买处联系客服处理。';
