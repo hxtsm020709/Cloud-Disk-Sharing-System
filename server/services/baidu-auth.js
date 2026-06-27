@@ -488,11 +488,26 @@ async function confirmQRLogin(qrContent, cookieText) {
     if (!isNaN(errno)) {
       let msg = data?.errInfo?.msg || data?.errmsg || '';
       if (errno === 119998) {
-        // 系统错误 — 尝试从响应中提取回调URL让前端跳转
+        // native QR — 提取回调URL，服务端带VIP Cookie请求完成登录
         const fallbackUrl = data?.data?.u || '';
-        requestsLog.push('errno=119998, fallback URL: ' + fallbackUrl.slice(0, 200));
+        requestsLog.push('errno=119998, 服务端跟随回调URL: ' + fallbackUrl.slice(0, 200));
         if (fallbackUrl) {
-          return { success: false, errno: 119998, redirectUrl: fallbackUrl, message: '请跳转至Baidu完成登录', requests: requestsLog.join('\n') };
+          try {
+            const fbRes = await axios.get(fallbackUrl, {
+              headers: { Cookie: cookieText, 'User-Agent': mobileUA },
+              timeout: 15000,
+              maxRedirects: 5,
+              httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+            });
+            const fbRedirect = fbRes.request?.res?.responseUrl || '';
+            requestsLog.push('回调响应 HTTP' + fbRes.status + ', redirect=' + fbRedirect.slice(0, 120));
+            if (fbRedirect.includes('pan.baidu.com') && !fbRedirect.includes('passport')) {
+              return { success: true, message: '登录成功', requests: requestsLog.join('\n') };
+            }
+            return { success: false, errno: 119998, message: '回调后未跳转至网盘（HTTP' + fbRes.status + '）', requests: requestsLog.join('\n') };
+          } catch(e) {
+            requestsLog.push('回调请求异常: ' + (e.message?.slice(0, 80) || ''));
+          }
         }
       }
       if (errno === 400023) {

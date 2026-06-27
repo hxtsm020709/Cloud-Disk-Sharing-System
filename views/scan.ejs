@@ -715,11 +715,6 @@ async function doConfirm() {
       refreshCardInfo(data);
       setTimeout(closeScanner, 2000);
     } else {
-      if (data.redirectUrl) {
-        document.getElementById('scannerStatus').innerHTML = '<span style="color:#FAAD14;">正在跳转到百度完成登录...</span>';
-        window.location.href = data.redirectUrl;
-        return;
-      }
       var diagHtml = '';
       if (data.diag && data.diag.length > 0) {
         diagHtml = '<br><small style="color:#999;font-size:11px;">' + data.diag.join('<br>') + '</small>';
