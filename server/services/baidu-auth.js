@@ -300,7 +300,11 @@ async function confirmQRLogin(qrContent, cookieText) {
       if (v) qrParams[key] = v;
     }
     if (urlObj.hostname === 'wappass.baidu.com' && urlObj.pathname === '/wp/') {
-      confirmPageUrl = trimmed;
+      // 去掉adapter和qrloginfrom，否则Baidu返回"请使用百度APP扫码"页面而非token页面
+      const cleaned = new URL(trimmed);
+      cleaned.searchParams.delete('adapter');
+      cleaned.searchParams.delete('qrloginfrom');
+      confirmPageUrl = cleaned.toString();
     }
   } catch {
     const signMatch = qrContent.match(/sign=([^&]+)/);
