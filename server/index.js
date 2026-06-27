@@ -378,7 +378,7 @@ async function start() {
         data: req.method !== 'GET' ? req.body : undefined,
         responseType: 'arraybuffer',
         timeout: 30000,
-        maxRedirects: 0,
+        maxRedirects: 5,
         validateStatus: s => s >= 200 && s < 500,
         httpsAgent: new https.Agent({ rejectUnauthorized: false }),
       });
