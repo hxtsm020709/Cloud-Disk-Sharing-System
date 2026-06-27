@@ -435,7 +435,8 @@ async function confirmQRLogin(qrContent, cookieText) {
     skin: '',
     liveAbility: '',
     suppcheck: '',
-    isBaiduApp: qrParams.isBaiduApp || '0',
+    // 手机端native QR → 用百度App身份确认
+    isBaiduApp: qrParams.isBaiduApp || (qrParams.qrloginfrom === 'native' ? '1' : '0'),
     qrloginfrom: qrParams.qrloginfrom || '',
     callback: qrParams.callback || '',
     loginProxy: qrParams.loginProxy || '',
