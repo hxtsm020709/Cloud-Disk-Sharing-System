@@ -463,7 +463,14 @@ async function confirmQRLogin(qrContent, cookieText) {
 
     const rawBody = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
     const data = typeof res.data === 'string' ? (() => { try { return JSON.parse(res.data); } catch { return res.data; } })() : res.data;
-    requestsLog.push('Step2 POST → HTTP' + res.status + ', response: ' + rawBody.slice(0, 300));
+    const redirectUrl = res.request?.res?.responseUrl || '';
+    requestsLog.push('Step2 POST → HTTP' + res.status + ', redirect=' + redirectUrl.slice(0, 80));
+    requestsLog.push('Step2 body: ' + rawBody.slice(0, 600));
+
+    // 重定向到pan.baidu.com = 登录成功
+    if (redirectUrl.includes('pan.baidu.com') && !redirectUrl.includes('passport')) {
+      return { success: true, message: '登录成功', requests: requestsLog.join('\n') };
+    }
 
     // 字符串响应直接匹配成功标记
     if (typeof data === 'string') {
@@ -475,7 +482,7 @@ async function confirmQRLogin(qrContent, cookieText) {
 
     const errno = parseInt(data?.errInfo?.no ?? data?.errno ?? data?.code);
     if (errno === 0) {
-      return { success: true, message: '登录确认成功', requests: requestsLog.join('\n') };
+      return { success: true, message: '登录确认成功（errno=0）', requests: requestsLog.join('\n') };
     }
     if (!isNaN(errno)) {
       let msg = data?.errInfo?.msg || data?.errmsg || '';
